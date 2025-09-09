@@ -384,7 +384,7 @@ jobs:
 ### Phase 3 — Linalg & Backends (CPU)
 - [ ] `faer` path implemented; `ndarray-linalg` optional behind feature.
 - [x] Solve/SVD/QR minimal set with fixtures.
-- [ ] Benchmarks for FFT, filters, solve.
+- [x] Benchmarks for FFT, filters, solve.
 
 ### Phase 4 — GPU Foundations
 - [ ] `scir-gpu` device array abstraction + transfers.

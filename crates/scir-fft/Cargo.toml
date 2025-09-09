@@ -13,3 +13,4 @@ realfft = "3"
 [dev-dependencies]
 ndarray-npy = "0.8"
 scir-core = { path = "../scir-core" }
+criterion = "0.5"
