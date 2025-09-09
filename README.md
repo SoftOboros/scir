@@ -6,8 +6,14 @@ This repository currently tracks early scaffolding work, including scripts for g
 
 ## Getting Started
 
-Run `scripts/setup-ci-env.sh` to install prerequisites.
+Run `scripts/setup-ci-env.sh` to install prerequisites and pull the SciPy submodule at `/scipy`.
 Install Python deps with `pip install -r requirements.txt` and run tests via `pytest` and `cargo test`.
+
+If you skipped the setup script, initialize the SciPy git submodule (checked out at `/scipy`) with:
+
+```
+git submodule update --init --depth 1 scipy
+```
 
 Generate reference FFT fixtures with `python scripts/gen_fixtures.py --sizes 8 16` (files land in `fixtures/`, which is git-ignored).
 Generate optimization fixtures with `python scripts/gen_optimize_fixtures.py` and signal fixtures with `python scripts/gen_signal_fixtures.py` (Butterworth, Chebyshev, Bessel, filtfilt, and `resample_poly` data). Optimization fixtures cover Nelder–Mead, BFGS, and L-BFGS results.
