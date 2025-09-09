@@ -1,7 +1,7 @@
 //! Core utilities for SciR
 
-use num_complex::Complex64;
 use ndarray::Array1;
+use num_complex::Complex64;
 
 pub fn assert_close_scalar(left: f64, right: f64, atol: f64, rtol: f64) {
     let diff = (left - right).abs();
@@ -23,12 +23,7 @@ pub fn assert_close_slice(left: &[f64], right: &[f64], atol: f64, rtol: f64) {
     }
 }
 
-pub fn assert_close_complex_slice(
-    left: &[Complex64],
-    right: &[Complex64],
-    atol: f64,
-    rtol: f64,
-) {
+pub fn assert_close_complex_slice(left: &[Complex64], right: &[Complex64], atol: f64, rtol: f64) {
     assert_eq!(left.len(), right.len(), "length mismatch");
     for (l, r) in left.iter().zip(right.iter()) {
         let diff = (*l - *r).norm();
@@ -109,8 +104,8 @@ macro_rules! assert_close {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_complex::Complex64;
     use ndarray::Array1;
+    use num_complex::Complex64;
 
     #[test]
     fn macro_works() {
@@ -141,10 +136,7 @@ mod tests {
 
     #[test]
     fn complex_array_macro() {
-        let a = Array1::from_vec(vec![
-            Complex64::new(1.0, 2.0),
-            Complex64::new(0.5, -0.5),
-        ]);
+        let a = Array1::from_vec(vec![Complex64::new(1.0, 2.0), Complex64::new(0.5, -0.5)]);
         let b = Array1::from_vec(vec![
             Complex64::new(1.0, 2.0 + 1e-9),
             Complex64::new(0.5, -0.5),

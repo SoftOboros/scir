@@ -58,17 +58,20 @@ mod tests {
     use super::*;
     use ndarray::{array, Array1, Array2};
     use ndarray_npy::ReadNpyExt;
+    use proptest::prelude::*;
     use scir_core::assert_close;
     use std::{fs::File, path::PathBuf};
-    use proptest::prelude::*;
 
     #[test]
     #[cfg(feature = "blas")]
     fn solve_matches_fixture() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        let a: Array2<f64> = ReadNpyExt::read_npy(File::open(base.join("lin_solve_A.npy")).unwrap()).unwrap();
-        let b: Array1<f64> = ReadNpyExt::read_npy(File::open(base.join("lin_solve_b.npy")).unwrap()).unwrap();
-        let x_expected: Array1<f64> = ReadNpyExt::read_npy(File::open(base.join("lin_solve_x.npy")).unwrap()).unwrap();
+        let a: Array2<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("lin_solve_A.npy")).unwrap()).unwrap();
+        let b: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("lin_solve_b.npy")).unwrap()).unwrap();
+        let x_expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("lin_solve_x.npy")).unwrap()).unwrap();
         let x = solve(&a, &b);
         assert_close!(&x, &x_expected, array, atol = 1e-9, rtol = 1e-9);
     }
@@ -77,26 +80,42 @@ mod tests {
     #[cfg(feature = "blas")]
     fn svd_matches_fixture() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        let a: Array2<f64> = ReadNpyExt::read_npy(File::open(base.join("svd_A.npy")).unwrap()).unwrap();
+        let a: Array2<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("svd_A.npy")).unwrap()).unwrap();
         let (u, s, vt) = svd(&a);
         // Verify A ≈ U diag(S) Vt
         let m = a.nrows();
         let n = a.ncols();
         let k = s.len();
         let mut s_mat = Array2::<f64>::zeros((m, n));
-        for i in 0..k { s_mat[[i, i]] = s[i]; }
+        for i in 0..k {
+            s_mat[[i, i]] = s[i];
+        }
         let a_recon = u.dot(&s_mat).dot(&vt);
-        assert_close!(&a_recon.view().as_array().to_owned(), &a, array, atol = 1e-8, rtol = 1e-8);
+        assert_close!(
+            &a_recon.view().as_array().to_owned(),
+            &a,
+            array,
+            atol = 1e-8,
+            rtol = 1e-8
+        );
     }
 
     #[test]
     #[cfg(feature = "blas")]
     fn qr_matches_fixture() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        let a: Array2<f64> = ReadNpyExt::read_npy(File::open(base.join("qr_A.npy")).unwrap()).unwrap();
+        let a: Array2<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("qr_A.npy")).unwrap()).unwrap();
         let (q, r) = qr(&a);
         let a_recon = q.dot(&r);
-        assert_close!(&a_recon.view().as_array().to_owned(), &a, array, atol = 1e-8, rtol = 1e-8);
+        assert_close!(
+            &a_recon.view().as_array().to_owned(),
+            &a,
+            array,
+            atol = 1e-8,
+            rtol = 1e-8
+        );
     }
 
     // Property test: for SPD A, solve(A, b) should satisfy A x ≈ b

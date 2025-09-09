@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ndarray::Array1;
 
 fn gen_input(n: usize) -> Array1<f64> {
@@ -29,4 +29,3 @@ fn bench_filtfilt(c: &mut Criterion) {
 
 criterion_group!(benches, bench_sosfilt, bench_filtfilt);
 criterion_main!(benches);
-

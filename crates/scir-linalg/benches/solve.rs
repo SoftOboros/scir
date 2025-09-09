@@ -1,14 +1,10 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
-use ndarray::{array, Array2, Array1};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use ndarray::{array, Array1, Array2};
 
 #[cfg(feature = "blas")]
 fn bench_solve(c: &mut Criterion) {
     // Small, well-conditioned system
-    let a: Array2<f64> = array![
-        [4.0, 1.0, 2.0],
-        [1.0, 3.0, 0.5],
-        [2.0, 0.5, 5.0],
-    ];
+    let a: Array2<f64> = array![[4.0, 1.0, 2.0], [1.0, 3.0, 0.5], [2.0, 0.5, 5.0],];
     let b: Array1<f64> = array![1.0, 2.0, 3.0];
 
     c.bench_function("linalg_solve_3x3", |bencher| {
@@ -31,4 +27,3 @@ fn dummy(_c: &mut Criterion) {}
 criterion_group!(benches, dummy);
 #[cfg(not(feature = "blas"))]
 criterion_main!(benches);
-
