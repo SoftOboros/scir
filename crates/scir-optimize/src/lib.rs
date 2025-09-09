@@ -24,8 +24,8 @@ where
         }
         // centroid of all but worst
         let mut centroid = Array1::<f64>::zeros(n);
-        for i in 0..n {
-            centroid = centroid + &simplex[i].0;
+        for (p, _) in simplex.iter().take(n) {
+            centroid += p;
         }
         centroid /= n as f64;
         // reflection
@@ -49,9 +49,9 @@ where
             } else {
                 // shrink
                 let best_point = simplex[0].0.clone();
-                for i in 1..=n {
-                    simplex[i].0 = &best_point + 0.5 * (&simplex[i].0 - &best_point);
-                    simplex[i].1 = f(&simplex[i].0);
+                for (p, val) in simplex.iter_mut().take(n + 1).skip(1) {
+                    *p = &best_point + 0.5 * (&*p - &best_point);
+                    *val = f(p);
                 }
             }
         }
