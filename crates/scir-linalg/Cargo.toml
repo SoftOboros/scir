@@ -5,9 +5,8 @@ edition = "2021"
 license = "BSD-3-Clause"
 
 [features]
-# Default to BLAS/LAPACK via ndarray-linalg for immediate functionality.
-# Map features to optional dependencies.
-default = ["blas"]
+# No default to avoid unintended BLAS linkage in workspace builds.
+default = []
 blas = ["dep:ndarray-linalg"]
 faer = ["dep:faer"]
 
