@@ -55,6 +55,7 @@ mod tests {
     use ndarray_npy::ReadNpyExt;
     use scir_core::assert_close;
     use std::{fs::File, path::PathBuf};
+    use proptest::prelude::*;
 
     #[test]
     #[cfg(feature = "blas")]
@@ -92,5 +93,24 @@ mod tests {
         let a_recon = q.dot(&r);
         assert_close!(&a_recon.view().as_array().to_owned(), &a, array, atol = 1e-8, rtol = 1e-8);
     }
-}
 
+    // Property test: for SPD A, solve(A, b) should satisfy A x ≈ b
+    #[test]
+    #[cfg(feature = "blas")]
+    fn solve_spd_property() {
+        let mut rng = proptest::test_runner::TestRng::deterministic();
+        for _ in 0..16 {
+            // 5x5 SPD matrix
+            let m = 5usize;
+            let n = 5usize;
+            let vals: Vec<f64> = (0..(m * n)).map(|_| rng.random::<f64>()).collect();
+            let a_rand = Array2::from_shape_vec((m, n), vals).unwrap();
+            let a = a_rand.t().dot(&a_rand) + Array2::<f64>::eye(m);
+            let b_vals: Vec<f64> = (0..m).map(|_| rng.random::<f64>()).collect();
+            let b = Array1::from_vec(b_vals);
+            let x = solve(&a, &b);
+            let b_recon = a.dot(&x);
+            assert_close!(&b_recon, &b, array, atol = 1e-8, rtol = 1e-8);
+        }
+    }
+}
