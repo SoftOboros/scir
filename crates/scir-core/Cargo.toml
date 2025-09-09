@@ -1,0 +1,11 @@
+[package]
+name = "scir-core"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+num-complex = "0.4"
+ndarray = "0.15"

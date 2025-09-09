@@ -1,0 +1,13 @@
+[package]
+name = "scir-signal"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+
+[dependencies]
+ndarray = "0.15"
+iir_filters = "0.1.3"
+scir-core = { path = "../scir-core" }
+
+[dev-dependencies]
+ndarray-npy = "0.8"

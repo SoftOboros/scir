@@ -1,0 +1,15 @@
+[package]
+name = "scir-fft"
+version = "0.0.0"
+edition = "2021"
+license = "BSD-3-Clause"
+
+[dependencies]
+ndarray = "0.15"
+num-complex = "0.4"
+rustfft = "6"
+realfft = "3"
+
+[dev-dependencies]
+ndarray-npy = "0.8"
+scir-core = { path = "../scir-core" }

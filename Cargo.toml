@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "crates/scir-core",
+    "crates/scir-nd",
+    "crates/scir-fft",
+    "crates/scir-signal",
+    "crates/scir-optimize",
+]
+resolver = "2"
