@@ -1,0 +1,32 @@
+[package]
+name = "scir-linalg"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+
+[features]
+# Default to BLAS/LAPACK via ndarray-linalg for immediate functionality.
+# Faer backend is prepared and will be enabled in a follow-up.
+default = ["blas"]
+blas = []
+faer = []
+
+[dependencies]
+ndarray = "0.15"
+scir-core = { path = "../scir-core" }
+
+# BLAS/LAPACK-backed ndarray-linalg (optional)
+[dependencies.ndarray-linalg]
+version = "0.16"
+optional = true
+default-features = false
+features = ["openblas-static"]
+
+# Faer backend (optional)
+[dependencies.faer]
+version = "0.19"
+optional = true
+
+[dev-dependencies]
+ndarray-npy = "0.8"
+
