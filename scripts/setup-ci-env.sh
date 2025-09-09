@@ -2,7 +2,9 @@
 # Setup minimal environment for SciR CI builds.
 set -euo pipefail
 
-pip install -r requirements.txt
+repo_root="$(git rev-parse --show-toplevel)"
+git -C "$repo_root" submodule update --init --depth 1 scipy
+pip install -r "$repo_root/requirements.txt"
 
 # Install Rust using rustup
 curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable

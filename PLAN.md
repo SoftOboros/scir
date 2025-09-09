@@ -431,3 +431,6 @@ jobs:
 - Phase 2 complete: core signal routines and L-BFGS optimizer validated.
 - Added pre-commit hooks and updated contributing guidelines.
 - Removed SciPy git submodule; pip-installed SciPy satisfies fixture generation.
+- Phase 3 kick-off: reintroduced SciPy git submodule at `/scipy` and updated documentation references.
+- Updated CI setup script to initialize the SciPy submodule automatically.
+- Documented submodule path as `/scipy` and made setup script path-agnostic.
