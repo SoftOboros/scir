@@ -269,7 +269,7 @@ jobs:
 - Use **synthetic data** for tests; avoid copyrighted datasets unless licenses are compatible and recorded.
 
 ### 10.4 Submodules & Vendoring
-- **Submodule OK:** Link SciPy as a **git submodule** for local testing/reference; it remains a separate project under its license.
+- Install SciPy via `pip` for local testing/reference; avoid git submodules unless absolutely necessary.
 - **Do NOT vendor** SciPy code into `scir` crates. Keep Python tooling under `tools/` and out of publishable crates.
 - Ensure crates publish **without** SciPy sources (check `include`/`exclude` in `Cargo.toml`).
 
@@ -406,3 +406,28 @@ jobs:
 
 **TL;DR:** The plan now mirrors the thread’s intent, corrects GPU/CI realities (self‑hosted requirement), avoids speculative crates, nails fixture‑driven parity, and adds clear phase gates so this can feel like “shooting fish in a barrel” — with receipts in CI.
 
+
+## Progress Log
+- Initial scaffolding: README, AGENTS, SciPy submodule, script updates.
+- Added numpy/scipy deps and bootstrap scir-core/nd crates.
+
+- Implemented assert_close! macro and ndarray Vec conversion helpers.
+- Created sample fixture generation script and ignored output in git.
+- Documented Python dependency installation steps in README.
+- Added slice/complex support to `assert_close!` and parameterized fixture generator.
+- Extended `assert_close!` to work with ndarray arrays and documented submodule init in README.
+- Added array-based tests in `scir-nd` and switched fixtures to `.npy` with documented format.
+
+- Created scir-fft crate with real FFT and fixture-based parity tests.
+- Added CONTRIBUTING guide for contributors.
+- Implemented inverse FFT with fixtures for multiple sizes and noted style guidelines in CONTRIBUTING.
+- Added parity tests for FFT and IFFT across multiple fixture sizes.
+- Added real FFT (rfft/irfft) routines with multi-size fixtures and tests.
+- Introduced scir-signal crate with Butterworth design and sosfilt parity.
+- Added scir-optimize crate implementing Nelder–Mead and BFGS validated on Rosenbrock and Himmelblau fixtures.
+- Extended signal fixtures to include Chebyshev and Bessel designs with Rust APIs and filtfilt scaffolding.
+- Added zero-phase filtering and `resample_poly` fixtures with Rust parity tests.
+- Implemented L-BFGS optimizer and fixtures for Rosenbrock and Himmelblau.
+- Phase 2 complete: core signal routines and L-BFGS optimizer validated.
+- Added pre-commit hooks and updated contributing guidelines.
+- Removed SciPy git submodule; pip-installed SciPy satisfies fixture generation.

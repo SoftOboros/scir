@@ -1,0 +1,8 @@
+[package]
+name = "scir-nd"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+ndarray = "0.15"
+scir-core = { path = "../scir-core" }

@@ -1,16 +1,7 @@
-# Ignore build and temporary files
-
-/target
-/Cargo.lock
-**/*.rs.bk
-/coverage
+/target/
+**/target/
+**/*.pyc
+**/__pycache__/
+.venv/
 .envrc
-venv
-.DS_Store
-**/*.map
-**/sorted_symbols.txt
-*.pyc
-**/boards.json
-**/mcu.json
-codex_state/
-.codex/
+fixtures/
