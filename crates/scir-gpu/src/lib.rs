@@ -74,20 +74,28 @@ impl<T: Copy> DeviceArray<T> {
 }
 
 impl<T: Copy> DeviceArray<T> {
+    #[cfg(feature = "cuda")]
     pub fn to_device(&mut self, device: Device) -> Result<(), GpuError> {
         match device {
             Device::Cpu => {
                 self.device = Device::Cpu;
                 Ok(())
             }
-            #[cfg(feature = "cuda")]
             Device::Cuda => {
                 // Placeholder: actual upload would allocate device memory and copy.
                 self.device = Device::Cuda;
                 Ok(())
             }
-            #[cfg(not(feature = "cuda"))]
-            _ => Err(GpuError::BackendUnavailable("cuda")),
+        }
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    pub fn to_device(&mut self, device: Device) -> Result<(), GpuError> {
+        match device {
+            Device::Cpu => {
+                self.device = Device::Cpu;
+                Ok(())
+            }
         }
     }
 }
@@ -133,24 +141,28 @@ where
 impl DeviceArray<f32> {
     /// Elementwise add-scalar, dispatching to CUDA if device == Cuda and feature enabled.
     pub fn add_scalar_auto(&self, alpha: f32) -> Self {
-        match self.device {
-            Device::Cpu => self.mul_scalar(1.0f32).add_scalar(alpha), // reuse CPU path
-            #[cfg(feature = "cuda")]
-            Device::Cuda => {
-                let mut out = vec![0.0f32; self.host.len()];
-                if let Err(_) = crate::add_scalar_f32_cuda(&self.host, alpha, &mut out) {
-                    // Fallback to CPU on failure
-                    return self.mul_scalar(1.0f32).add_scalar(alpha);
-                }
-                DeviceArray {
-                    shape: self.shape.clone(),
-                    dtype: self.dtype,
-                    device: self.device,
-                    host: out,
+        #[cfg(feature = "cuda")]
+        {
+            match self.device {
+                Device::Cpu => self.mul_scalar(1.0f32).add_scalar(alpha), // reuse CPU path
+                Device::Cuda => {
+                    let mut out = vec![0.0f32; self.host.len()];
+                    if let Err(_) = crate::add_scalar_f32_cuda(&self.host, alpha, &mut out) {
+                        // Fallback to CPU on failure
+                        return self.mul_scalar(1.0f32).add_scalar(alpha);
+                    }
+                    DeviceArray {
+                        shape: self.shape.clone(),
+                        dtype: self.dtype,
+                        device: self.device,
+                        host: out,
+                    }
                 }
             }
-            #[cfg(not(feature = "cuda"))]
-            _ => self.mul_scalar(1.0f32).add_scalar(alpha),
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return self.mul_scalar(1.0f32).add_scalar(alpha);
         }
     }
 
@@ -159,60 +171,74 @@ impl DeviceArray<f32> {
         if self.shape != other.shape {
             return Err(GpuError::ShapeMismatch);
         }
-        match (self.device, other.device) {
-            (Device::Cpu, Device::Cpu) => self.add(other),
-            #[cfg(feature = "cuda")]
-            (Device::Cuda, Device::Cuda) => {
-                let mut out = vec![0.0f32; self.host.len()];
-                if let Err(_) = crate::add_vec_f32_cuda(&self.host, &other.host, &mut out) {
-                    // Fallback to CPU on failure
-                    return self.add(other);
+        #[cfg(feature = "cuda")]
+        {
+            match (self.device, other.device) {
+                (Device::Cpu, Device::Cpu) => self.add(other),
+                (Device::Cuda, Device::Cuda) => {
+                    let mut out = vec![0.0f32; self.host.len()];
+                    if let Err(_) = crate::add_vec_f32_cuda(&self.host, &other.host, &mut out) {
+                        // Fallback to CPU on failure
+                        return self.add(other);
+                    }
+                    Ok(DeviceArray {
+                        shape: self.shape.clone(),
+                        dtype: self.dtype,
+                        device: self.device,
+                        host: out,
+                    })
                 }
-                Ok(DeviceArray {
-                    shape: self.shape.clone(),
-                    dtype: self.dtype,
-                    device: self.device,
-                    host: out,
-                })
+                _ => self.add(other),
             }
-            _ => self.add(other),
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return self.add(other);
         }
     }
 
     /// Elementwise mul-scalar with device dispatch.
     pub fn mul_scalar_auto(&self, alpha: f32) -> Self {
-        match self.device {
-            Device::Cpu => self.mul_scalar(alpha),
-            #[cfg(feature = "cuda")]
-            Device::Cuda => {
-                let mut out = vec![0.0f32; self.host.len()];
-                if let Err(_) = crate::mul_scalar_f32_cuda(&self.host, alpha, &mut out) {
-                    return self.mul_scalar(alpha);
-                }
-                DeviceArray {
-                    shape: self.shape.clone(),
-                    dtype: self.dtype,
-                    device: self.device,
-                    host: out,
+        #[cfg(feature = "cuda")]
+        {
+            match self.device {
+                Device::Cpu => self.mul_scalar(alpha),
+                Device::Cuda => {
+                    let mut out = vec![0.0f32; self.host.len()];
+                    if let Err(_) = crate::mul_scalar_f32_cuda(&self.host, alpha, &mut out) {
+                        return self.mul_scalar(alpha);
+                    }
+                    DeviceArray {
+                        shape: self.shape.clone(),
+                        dtype: self.dtype,
+                        device: self.device,
+                        host: out,
+                    }
                 }
             }
-            #[cfg(not(feature = "cuda"))]
-            _ => self.mul_scalar(alpha),
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            return self.mul_scalar(alpha);
         }
     }
 }
 
 /// Dispatch FIR to CUDA if requested; otherwise use CPU baseline.
 pub fn fir1d_batched_f32_auto(x: &Array2<f32>, taps: &Array1<f32>, device: Device) -> Array2<f32> {
-    match device {
-        Device::Cpu => fir1d_batched_f32(x, taps),
-        #[cfg(feature = "cuda")]
-        Device::Cuda => match crate::fir1d_batched_f32_cuda(x, taps) {
-            Ok(y) => y,
-            Err(_) => fir1d_batched_f32(x, taps),
-        },
-        #[cfg(not(feature = "cuda"))]
-        _ => fir1d_batched_f32(x, taps),
+    #[cfg(feature = "cuda")]
+    {
+        return match device {
+            Device::Cpu => fir1d_batched_f32(x, taps),
+            Device::Cuda => match crate::fir1d_batched_f32_cuda(x, taps) {
+                Ok(y) => y,
+                Err(_) => fir1d_batched_f32(x, taps),
+            },
+        };
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        return fir1d_batched_f32(x, taps);
     }
 }
 
@@ -795,10 +821,10 @@ pub fn fir1d_batched_f32(x: &Array2<f32>, taps: &Array1<f32>) -> Array2<f32> {
         let mut yout = y.index_axis_mut(Axis(0), bi);
         for i in 0..n {
             let mut acc = 0.0f32;
-            let start = if i + 1 >= k { i + 1 - k } else { 0 };
+            let start = (i + 1).saturating_sub(k);
             for (t_idx, xi) in (start..=i).rev().enumerate() {
                 let tap = taps[k - 1 - t_idx];
-                acc = acc + tap * xin[xi];
+                acc += tap * xin[xi];
             }
             yout[i] = acc;
         }
@@ -815,10 +841,10 @@ pub fn fir1d_batched_f64(x: &Array2<f64>, taps: &Array1<f64>) -> Array2<f64> {
         let mut yout = y.index_axis_mut(Axis(0), bi);
         for i in 0..n {
             let mut acc = 0.0f64;
-            let start = if i + 1 >= k { i + 1 - k } else { 0 };
+            let start = (i + 1).saturating_sub(k);
             for (t_idx, xi) in (start..=i).rev().enumerate() {
                 let tap = taps[k - 1 - t_idx];
-                acc = acc + tap * xin[xi];
+                acc += tap * xin[xi];
             }
             yout[i] = acc;
         }
