@@ -22,3 +22,9 @@ repos:
         language: system
         types: [rust]
         pass_filenames: false
+      - id: cargo-fmt-linalg
+        name: cargo fmt (scir-linalg)
+        entry: cargo fmt --all --manifest-path crates/scir-linalg/Cargo.toml
+        language: system
+        types: [rust]
+        pass_filenames: false

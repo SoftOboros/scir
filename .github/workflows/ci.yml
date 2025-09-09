@@ -67,28 +67,50 @@ jobs:
           path: fixtures
       - name: Format check
         run: cargo fmt --all -- --check
-      - name: Clippy (Linux)
+      - name: Clippy workspace (all OS, exclude linalg)
+        env:
+          CARGO_TARGET_DIR: target-ws
+        run: cargo clippy --workspace --all-targets --exclude scir-linalg -- -D warnings
+      - name: Clippy scir-linalg (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: cargo clippy --workspace --features "blas,linux-blas" -- -D warnings
-      - name: Clippy (macOS)
+        env:
+          CARGO_TARGET_DIR: target-linalg-linux
+        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,linux-blas" -- -D warnings
+      - name: Clippy scir-linalg (macOS)
         if: matrix.os == 'macos-latest'
-        run: cargo clippy --workspace --features "faer" -- -D warnings
-      - name: Clippy (Windows)
+        env:
+          CARGO_TARGET_DIR: target-linalg-macos
+        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" -- -D warnings
+      - name: Clippy scir-linalg (Windows)
         if: matrix.os == 'windows-latest'
-        run: cargo clippy --workspace --features "blas,windows-openblas" -- -D warnings
-      - name: Build + Test (Linux, OpenBLAS static)
+        env:
+          CARGO_TARGET_DIR: target-linalg-windows
+        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" -- -D warnings
+      - name: Build + Test core crates (no BLAS)
+        env:
+          CARGO_TARGET_DIR: target-core
+        run: |
+          for pkg in scir-core scir-nd scir-fft scir-signal scir-optimize; do \
+            echo "::group::build $pkg"; cargo build -p $pkg --verbose; echo "::endgroup::"; \
+            echo "::group::test  $pkg"; cargo test  -p $pkg --verbose; echo "::endgroup::"; \
+          done
+      - name: Build + Test scir-linalg (Linux, OpenBLAS static)
         if: matrix.os == 'ubuntu-latest'
+        env:
+          CARGO_TARGET_DIR: target-linalg-linux
         run: |
-          cargo build --workspace --features "blas,linux-blas" --verbose
-          cargo test  --workspace --features "blas,linux-blas" --verbose
-      - name: Build + Test (macOS, faer)
+          cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,linux-blas" --verbose
+          cargo test  --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,linux-blas" --verbose
+      - name: Build scir-linalg (macOS, faer)
         if: matrix.os == 'macos-latest'
-        run: |
-          cargo build --workspace --features "faer" --verbose
-          cargo test  --workspace --features "faer" --verbose
-      - name: Build + Test (Windows, OpenBLAS via vcpkg)
+        env:
+          CARGO_TARGET_DIR: target-linalg-macos
+        run: cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" --verbose
+      - name: Build + Test scir-linalg (Windows, OpenBLAS via vcpkg)
         if: matrix.os == 'windows-latest'
         shell: bash
+        env:
+          CARGO_TARGET_DIR: target-linalg-windows
         run: |
-          cargo build --workspace --features "blas,windows-openblas" --verbose
-          cargo test  --workspace --features "blas,windows-openblas" --verbose
+          cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
+          cargo test  --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
