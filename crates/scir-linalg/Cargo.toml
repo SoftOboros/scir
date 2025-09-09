@@ -6,10 +6,10 @@ license = "BSD-3-Clause"
 
 [features]
 # Default to BLAS/LAPACK via ndarray-linalg for immediate functionality.
-# Faer backend is prepared and will be enabled in a follow-up.
+# Map features to optional dependencies.
 default = ["blas"]
-blas = []
-faer = []
+blas = ["dep:ndarray-linalg"]
+faer = ["dep:faer"]
 
 [dependencies]
 ndarray = "0.15"
@@ -29,4 +29,4 @@ optional = true
 
 [dev-dependencies]
 ndarray-npy = "0.8"
-
+criterion = "0.5"
