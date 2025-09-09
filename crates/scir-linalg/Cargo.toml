@@ -1,0 +1,39 @@
+[package]
+name = "scir-linalg"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+
+[features]
+# No default to avoid unintended BLAS linkage in workspace builds.
+default = []
+blas = ["dep:ndarray-linalg"]
+faer = ["dep:faer"]
+
+# OS-specific BLAS backends (choose exactly one in CI per OS)
+linux-blas = ["ndarray-linalg/openblas-static"]
+# macOS uses pure-Rust `faer` in CI to avoid system framework coupling
+# If needed later, map to a supported ndarray-linalg feature.
+macos-accelerate = []
+windows-openblas = ["ndarray-linalg/openblas-system"]
+
+[dependencies]
+ndarray = "0.15"
+scir-core = { path = "../scir-core" }
+
+# BLAS/LAPACK-backed ndarray-linalg (optional)
+[dependencies.ndarray-linalg]
+version = "0.16"
+optional = true
+default-features = false
+
+
+# Faer backend (optional)
+[dependencies.faer]
+version = "0.19"
+optional = true
+
+[dev-dependencies]
+ndarray-npy = "0.8"
+criterion = "0.5"
+proptest = "1"

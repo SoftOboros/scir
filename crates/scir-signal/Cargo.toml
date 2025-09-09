@@ -11,3 +11,4 @@ scir-core = { path = "../scir-core" }
 
 [dev-dependencies]
 ndarray-npy = "0.8"
+criterion = "0.5"

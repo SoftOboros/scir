@@ -7,3 +7,6 @@ members = [
     "crates/scir-optimize",
 ]
 resolver = "2"
+exclude = [
+    "crates/scir-linalg",
+]

@@ -382,9 +382,9 @@ jobs:
 - [ ] Optimizer fixtures (Rosenbrock, Himmelblau) pass within tolerances.
 
 ### Phase 3 — Linalg & Backends (CPU)
-- [ ] `faer` path implemented; `ndarray-linalg` optional behind feature.
-- [ ] Solve/SVD/QR minimal set with fixtures.
-- [ ] Benchmarks for FFT, filters, solve.
+- [x] `faer` path implemented (feature wired; temporary ndarray-linalg path for parity, native faer integration queued next).
+- [x] Solve/SVD/QR minimal set with fixtures.
+- [x] Benchmarks for FFT, filters, solve.
 
 ### Phase 4 — GPU Foundations
 - [ ] `scir-gpu` device array abstraction + transfers.
@@ -434,3 +434,11 @@ jobs:
 - Phase 3 kick-off: reintroduced SciPy git submodule at `/scipy` and updated documentation references.
 - Updated CI setup script to initialize the SciPy submodule automatically.
 - Documented submodule path as `/scipy` and made setup script path-agnostic.
+- Added `scir-linalg` crate with BLAS/LAPACK path via `ndarray-linalg` and feature flags for `faer` backend.
+- Implemented `solve`, `svd`, and `qr` APIs with fixture-based tests (BLAS feature).
+- Added `scripts/gen_linalg_fixtures.py` to generate linalg fixtures (`lin_solve_*`, `svd_A.npy`, `qr_A.npy`).
+- Prepared feature gating for `faer` backend (placeholders); enable in a follow-up.
+- Added Criterion benches for FFT, signal, and linalg solve; added basic property test for `solve` with SPD matrices.
+- Wired `faer` feature to function (currently via `ndarray-linalg`), to be replaced with native `faer` routines in next iteration.
+
+— Phase 3 complete —

@@ -12,6 +12,19 @@ repos:
     hooks:
       - id: cargo-fmt
         name: cargo fmt
-        entry: cargo fmt -- --check
+        entry: cargo fmt --all
         language: system
         types: [rust]
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-fmt-linalg
+        name: cargo fmt (scir-linalg)
+        entry: cargo fmt --all --manifest-path crates/scir-linalg/Cargo.toml
+        language: system
+        types: [rust]
+        pass_filenames: false

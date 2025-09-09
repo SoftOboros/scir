@@ -2,8 +2,8 @@
 
 use ndarray::Array1;
 use num_complex::Complex64;
-use rustfft::FftPlanner;
 use realfft::RealFftPlanner;
+use rustfft::FftPlanner;
 
 /// Compute the forward FFT of a real-valued array.
 pub fn fft(input: &Array1<f64>) -> Array1<Complex64> {
@@ -50,17 +50,19 @@ pub fn irfft(input: &Array1<Complex64>) -> Array1<f64> {
 mod tests {
     use super::*;
     use ndarray_npy::ReadNpyExt;
-    use std::{fs::File, path::PathBuf};
     use scir_core::assert_close;
+    use std::{fs::File, path::PathBuf};
 
     #[test]
     fn fft_matches_fixtures() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
         for &n in &[8, 16] {
             let input: Array1<f64> =
-                ReadNpyExt::read_npy(File::open(base.join(format!("fft_input_{n}.npy"))).unwrap()).unwrap();
+                ReadNpyExt::read_npy(File::open(base.join(format!("fft_input_{n}.npy"))).unwrap())
+                    .unwrap();
             let expected: Array1<Complex64> =
-                ReadNpyExt::read_npy(File::open(base.join(format!("fft_output_{n}.npy"))).unwrap()).unwrap();
+                ReadNpyExt::read_npy(File::open(base.join(format!("fft_output_{n}.npy"))).unwrap())
+                    .unwrap();
             let result = fft(&input);
             assert_close!(&result, &expected, complex_array, atol = 1e-9, rtol = 1e-9);
         }
@@ -70,10 +72,9 @@ mod tests {
     fn ifft_matches_fixtures() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
         for &n in &[8, 16] {
-            let input: Array1<Complex64> = ReadNpyExt::read_npy(
-                File::open(base.join(format!("fft_output_{n}.npy"))).unwrap(),
-            )
-            .unwrap();
+            let input: Array1<Complex64> =
+                ReadNpyExt::read_npy(File::open(base.join(format!("fft_output_{n}.npy"))).unwrap())
+                    .unwrap();
             let expected: Array1<Complex64> = ReadNpyExt::read_npy(
                 File::open(base.join(format!("ifft_output_{n}.npy"))).unwrap(),
             )
@@ -88,7 +89,8 @@ mod tests {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
         for &n in &[8, 16] {
             let input: Array1<f64> =
-                ReadNpyExt::read_npy(File::open(base.join(format!("fft_input_{n}.npy"))).unwrap()).unwrap();
+                ReadNpyExt::read_npy(File::open(base.join(format!("fft_input_{n}.npy"))).unwrap())
+                    .unwrap();
             let expected: Array1<Complex64> = ReadNpyExt::read_npy(
                 File::open(base.join(format!("rfft_output_{n}.npy"))).unwrap(),
             )
@@ -106,10 +108,9 @@ mod tests {
                 File::open(base.join(format!("rfft_output_{n}.npy"))).unwrap(),
             )
             .unwrap();
-            let expected: Array1<f64> = ReadNpyExt::read_npy(
-                File::open(base.join(format!("fft_input_{n}.npy"))).unwrap(),
-            )
-            .unwrap();
+            let expected: Array1<f64> =
+                ReadNpyExt::read_npy(File::open(base.join(format!("fft_input_{n}.npy"))).unwrap())
+                    .unwrap();
             let result = irfft(&input);
             assert_close!(&result, &expected, array, atol = 1e-9, rtol = 1e-9);
         }

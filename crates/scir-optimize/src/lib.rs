@@ -3,13 +3,7 @@
 use ndarray::{Array1, Array2, Axis};
 
 /// Nelder-Mead simplex algorithm.
-pub fn nelder_mead<F>(
-    f: F,
-    start: Array1<f64>,
-    step: f64,
-    max_iter: usize,
-    tol: f64,
-) -> Array1<f64>
+pub fn nelder_mead<F>(f: F, start: Array1<f64>, step: f64, max_iter: usize, tol: f64) -> Array1<f64>
 where
     F: Fn(&Array1<f64>) -> f64,
 {
@@ -30,8 +24,8 @@ where
         }
         // centroid of all but worst
         let mut centroid = Array1::<f64>::zeros(n);
-        for i in 0..n {
-            centroid = centroid + &simplex[i].0;
+        for (p, _) in simplex.iter().take(n) {
+            centroid += p;
         }
         centroid /= n as f64;
         // reflection
@@ -55,9 +49,9 @@ where
             } else {
                 // shrink
                 let best_point = simplex[0].0.clone();
-                for i in 1..=n {
-                    simplex[i].0 = &best_point + 0.5 * (&simplex[i].0 - &best_point);
-                    simplex[i].1 = f(&simplex[i].0);
+                for (p, val) in simplex.iter_mut().take(n + 1).skip(1) {
+                    *p = &best_point + 0.5 * (&*p - &best_point);
+                    *val = f(p);
                 }
             }
         }
@@ -67,13 +61,7 @@ where
 }
 
 /// BFGS optimization with provided gradient.
-pub fn bfgs<F, G>(
-    f: F,
-    grad: G,
-    start: Array1<f64>,
-    max_iter: usize,
-    tol: f64,
-) -> Array1<f64>
+pub fn bfgs<F, G>(f: F, grad: G, start: Array1<f64>, max_iter: usize, tol: f64) -> Array1<f64>
 where
     F: Fn(&Array1<f64>) -> f64,
     G: Fn(&Array1<f64>) -> Array1<f64>,
@@ -106,9 +94,19 @@ where
         }
         let rho = 1.0 / ys;
         let i = Array2::<f64>::eye(n);
-        let sy = s.view().insert_axis(Axis(1)).dot(&y.view().insert_axis(Axis(0)));
-        let ys_mat = y.view().insert_axis(Axis(1)).dot(&s.view().insert_axis(Axis(0)));
-        h = (i.clone() - rho * sy).dot(&h).dot(&(i - rho * ys_mat)) + rho * s.view().insert_axis(Axis(1)).dot(&s.view().insert_axis(Axis(0)));
+        let sy = s
+            .view()
+            .insert_axis(Axis(1))
+            .dot(&y.view().insert_axis(Axis(0)));
+        let ys_mat = y
+            .view()
+            .insert_axis(Axis(1))
+            .dot(&s.view().insert_axis(Axis(0)));
+        h = (i.clone() - rho * sy).dot(&h).dot(&(i - rho * ys_mat))
+            + rho
+                * s.view()
+                    .insert_axis(Axis(1))
+                    .dot(&s.view().insert_axis(Axis(0)));
         x = x_new;
     }
     x
@@ -186,8 +184,8 @@ mod tests {
     use super::*;
     use ndarray::{array, Array1};
     use ndarray_npy::ReadNpyExt;
-    use std::{fs::File, path::PathBuf};
     use scir_core::assert_close;
+    use std::{fs::File, path::PathBuf};
 
     fn rosenbrock(x: &Array1<f64>) -> f64 {
         (1.0 - x[0]).powi(2) + 100.0 * (x[1] - x[0].powi(2)).powi(2)
@@ -214,7 +212,8 @@ mod tests {
     #[test]
     fn rosenbrock_nelder_mead_matches_fixture() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        let expected: Array1<f64> = ReadNpyExt::read_npy(File::open(base.join("rosenbrock_nelder.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("rosenbrock_nelder.npy")).unwrap()).unwrap();
         let result = nelder_mead(rosenbrock, array![-1.2, 1.0], 1.0, 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }
@@ -222,7 +221,8 @@ mod tests {
     #[test]
     fn rosenbrock_bfgs_matches_fixture() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        let expected: Array1<f64> = ReadNpyExt::read_npy(File::open(base.join("rosenbrock_bfgs.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("rosenbrock_bfgs.npy")).unwrap()).unwrap();
         let result = bfgs(rosenbrock, rosenbrock_grad, array![-1.2, 1.0], 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }
@@ -230,7 +230,8 @@ mod tests {
     #[test]
     fn himmelblau_nelder_mead_matches_fixture() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        let expected: Array1<f64> = ReadNpyExt::read_npy(File::open(base.join("himmelblau_nelder.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("himmelblau_nelder.npy")).unwrap()).unwrap();
         let result = nelder_mead(himmelblau, array![0.0, 0.0], 0.5, 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-4, rtol = 1e-5);
     }
@@ -238,7 +239,8 @@ mod tests {
     #[test]
     fn himmelblau_bfgs_matches_fixture() {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        let expected: Array1<f64> = ReadNpyExt::read_npy(File::open(base.join("himmelblau_bfgs.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("himmelblau_bfgs.npy")).unwrap()).unwrap();
         let result = bfgs(himmelblau, himmelblau_grad, array![0.0, 0.0], 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }
@@ -248,7 +250,14 @@ mod tests {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
         let expected: Array1<f64> =
             ReadNpyExt::read_npy(File::open(base.join("rosenbrock_lbfgs.npy")).unwrap()).unwrap();
-        let result = lbfgs(rosenbrock, rosenbrock_grad, array![-1.2, 1.0], 2000, 1e-8, 5);
+        let result = lbfgs(
+            rosenbrock,
+            rosenbrock_grad,
+            array![-1.2, 1.0],
+            2000,
+            1e-8,
+            5,
+        );
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }
 

@@ -1,107 +1,116 @@
-# Continuous integration pipeline building, linting, testing, and cross-compiling embedded examples.
 name: CI
 on:
+  push:
   pull_request:
-    branches:
-      - main
+
 jobs:
-  build:
+  python-fixtures:
+    name: Python fixtures + checks
     runs-on: ubuntu-latest
-    container:
-      image: docker.io/iraa/rlvgl:latest
-      # Start as your non-root user right away
-      # options: --user ${{ vars.RLVGL_BUILDER_USER }}
-
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - run: cargo build --workspace --verbose
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace -- -D warnings
-      - run: cargo test --workspace --target x86_64-unknown-linux-gnu --verbose
-      - run: RUSTDOCFLAGS="--cfg docsrs --cfg nightly" cargo +nightly doc --all-features --no-deps --target x86_64-unknown-linux-gnu
-
-  stm32h747i-disco:
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/iraa/rlvgl:latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build firmware
-        run: RUSTFLAGS="" cargo build --bin rlvgl-stm32h747i-disco --features "stm32h747i_disco,qrcode,png,jpeg,fontdue" --target thumbv7em-none-eabihf --release
-      - name: Firmware size
-        run: arm-none-eabi-size target/thumbv7em-none-eabihf/release/rlvgl-stm32h747i-disco | tee size.txt
-      - name: Upload firmware
-        uses: actions/upload-artifact@v4
+      - uses: actions/setup-python@v5
         with:
-          name: rlvgl-stm32h747i-disco
-          path: |
-            target/thumbv7em-none-eabihf/release/rlvgl-stm32h747i-disco
-            size.txt
-
-  stm32h747i-disco-fatfs:
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/iraa/rlvgl:latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build firmware (fatfs no_std demo)
+          python-version: '3.12'
+      - name: Install Python dependencies
         run: |
-          RUSTFLAGS="" cargo build \
-            --bin rlvgl-stm32h747i-disco \
-            --features "stm32h747i_disco,fatfs_nostd,sd_assets_demo" \
-            --target thumbv7em-none-eabihf --release || true
-
-  polish:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/iraa/rlvgl:latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Run polish
-        run: bash scripts/pre-commit.sh
-
-  chipdb:
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/iraa/rlvgl:latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Generate vendor databases
-        run: tools/build_vendor.sh
-      - name: Build vendor crate
-        env:
-          RLVGL_CHIP_SRC: chipdb/rlvgl-chips-stm/generated
-        run: cargo build -p rlvgl-chips-stm
-
-  boards:
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/iraa/rlvgl:latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Build STM32 board database
-        run: bash scripts/stm32_afdb_pipeline.sh
-      - name: Upload boards.json
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Bash script syntax check
+        run: bash -n scripts/*.sh
+      - name: Run Python script compile test
+        run: |
+          pip install pytest
+          pytest -q tests/test_scripts_compile.py
+      - name: Generate fixtures
+        run: |
+          python scripts/gen_fixtures.py -n 8 16
+          python scripts/gen_signal_fixtures.py
+          python scripts/gen_optimize_fixtures.py
+          python scripts/gen_linalg_fixtures.py
+      - name: Upload fixtures
         uses: actions/upload-artifact@v4
         with:
-          name: boards-json
-          path: chipdb/rlvgl-chips-stm/db/boards.json
+          name: scir-fixtures
+          path: fixtures/**
+
+  rust-tests:
+    name: Rust tests (matrix)
+    runs-on: ${{ matrix.os }}
+    needs: python-fixtures
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Setup vcpkg (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: johnwason/vcpkg-action@v7
+        with:
+          pkgs: openblas
+          triplet: x64-windows
+          token: ${{ github.token }}
+          extra-args: --clean-after-build
+      - name: Configure vcpkg env (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
+          echo "VCPKG_DEFAULT_TRIPLET=x64-windows" >> $GITHUB_ENV
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: scir-fixtures
+          path: fixtures
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy workspace (all OS, exclude linalg)
+        env:
+          CARGO_TARGET_DIR: target-ws
+        run: cargo clippy --workspace --all-targets --exclude scir-linalg -- -D warnings
+      - name: Clippy scir-linalg (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          CARGO_TARGET_DIR: target-linalg-linux
+        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,linux-blas" -- -D warnings
+      - name: Clippy scir-linalg (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          CARGO_TARGET_DIR: target-linalg-macos
+        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" -- -D warnings
+      - name: Clippy scir-linalg (Windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          CARGO_TARGET_DIR: target-linalg-windows
+        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" -- -D warnings
+      - name: Build + Test core crates (no BLAS)
+        env:
+          CARGO_TARGET_DIR: target-core
+        run: |
+          for pkg in scir-core scir-nd scir-fft scir-signal scir-optimize; do \
+            echo "::group::build $pkg"; cargo build -p $pkg --verbose; echo "::endgroup::"; \
+            echo "::group::test  $pkg"; cargo test  -p $pkg --verbose; echo "::endgroup::"; \
+          done
+      - name: Build + Test scir-linalg (Linux, OpenBLAS static)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          CARGO_TARGET_DIR: target-linalg-linux
+        run: |
+          cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,linux-blas" --verbose
+          cargo test  --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,linux-blas" --verbose
+      - name: Build scir-linalg (macOS, faer)
+        if: matrix.os == 'macos-latest'
+        env:
+          CARGO_TARGET_DIR: target-linalg-macos
+        run: cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" --verbose
+      - name: Build + Test scir-linalg (Windows, OpenBLAS via vcpkg)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: target-linalg-windows
+        run: |
+          cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
+          cargo test  --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
