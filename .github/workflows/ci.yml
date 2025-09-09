@@ -50,13 +50,16 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: johnwason/vcpkg-action@v7
         with:
+          pkgs: openblas
           triplet: x64-windows
-          vcpkgArguments: install openblas
+          token: ${{ github.token }}
+          extra-args: --clean-after-build
       - name: Configure vcpkg env (Windows)
         if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
-          echo "VCPKGRS_DYNAMIC=1" >> $Env:GITHUB_ENV
-          echo "VCPKG_DEFAULT_TRIPLET=x64-windows" >> $Env:GITHUB_ENV
+          echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
+          echo "VCPKG_DEFAULT_TRIPLET=x64-windows" >> $GITHUB_ENV
       - name: Download fixtures
         uses: actions/download-artifact@v4
         with:
@@ -69,7 +72,7 @@ jobs:
         run: cargo clippy --workspace --features "blas,linux-blas" -- -D warnings
       - name: Clippy (macOS)
         if: matrix.os == 'macos-latest'
-        run: cargo clippy --workspace --features "blas,macos-accelerate" -- -D warnings
+        run: cargo clippy --workspace --features "faer" -- -D warnings
       - name: Clippy (Windows)
         if: matrix.os == 'windows-latest'
         run: cargo clippy --workspace --features "blas,windows-openblas" -- -D warnings
@@ -78,11 +81,11 @@ jobs:
         run: |
           cargo build --workspace --features "blas,linux-blas" --verbose
           cargo test  --workspace --features "blas,linux-blas" --verbose
-      - name: Build + Test (macOS, Accelerate)
+      - name: Build + Test (macOS, faer)
         if: matrix.os == 'macos-latest'
         run: |
-          cargo build --workspace --features "blas,macos-accelerate" --verbose
-          cargo test  --workspace --features "blas,macos-accelerate" --verbose
+          cargo build --workspace --features "faer" --verbose
+          cargo test  --workspace --features "faer" --verbose
       - name: Build + Test (Windows, OpenBLAS via vcpkg)
         if: matrix.os == 'windows-latest'
         shell: bash

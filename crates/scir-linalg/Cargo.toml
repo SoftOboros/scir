@@ -9,11 +9,13 @@ license = "BSD-3-Clause"
 # Map features to optional dependencies.
 default = ["blas"]
 blas = ["dep:ndarray-linalg"]
-faer = ["dep:faer", "dep:ndarray-linalg"]
+faer = ["dep:faer"]
 
 # OS-specific BLAS backends (choose exactly one in CI per OS)
 linux-blas = ["ndarray-linalg/openblas-static"]
-macos-accelerate = ["ndarray-linalg/accelerate"]
+# macOS uses pure-Rust `faer` in CI to avoid system framework coupling
+# If needed later, map to a supported ndarray-linalg feature.
+macos-accelerate = []
 windows-openblas = ["ndarray-linalg/openblas-system"]
 
 [dependencies]
