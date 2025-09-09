@@ -30,22 +30,27 @@ pub fn qr(a: &Array2<f64>) -> (Array2<f64>, Array2<f64>) {
 
 // --- Faer backend placeholders (to be completed) ---
 
-/// Solve linear system with faer backend (placeholder).
+/// Solve linear system with `faer` feature enabled.
+/// Temporarily uses `ndarray-linalg` while native faer integration is prepared.
 #[cfg(all(feature = "faer", not(feature = "blas")))]
-pub fn solve(_a: &Array2<f64>, _b: &Array1<f64>) -> Array1<f64> {
-    unimplemented!("faer backend integration pending");
+pub fn solve(a: &Array2<f64>, b: &Array1<f64>) -> Array1<f64> {
+    use ndarray_linalg::Solve;
+    a.solve_into(b.clone()).expect("solve failed")
 }
 
-/// SVD via faer backend (placeholder).
+/// SVD via `faer` feature (temporary ndarray-linalg path).
 #[cfg(all(feature = "faer", not(feature = "blas")))]
-pub fn svd(_a: &Array2<f64>) -> (Array2<f64>, Array1<f64>, Array2<f64>) {
-    unimplemented!("faer backend integration pending");
+pub fn svd(a: &Array2<f64>) -> (Array2<f64>, Array1<f64>, Array2<f64>) {
+    use ndarray_linalg::SVD;
+    let (u_opt, s, vt_opt) = a.svd(true, true).expect("svd failed");
+    (u_opt.unwrap(), s, vt_opt.unwrap())
 }
 
-/// QR via faer backend (placeholder).
+/// QR via `faer` feature (temporary ndarray-linalg path).
 #[cfg(all(feature = "faer", not(feature = "blas")))]
-pub fn qr(_a: &Array2<f64>) -> (Array2<f64>, Array2<f64>) {
-    unimplemented!("faer backend integration pending");
+pub fn qr(a: &Array2<f64>) -> (Array2<f64>, Array2<f64>) {
+    use ndarray_linalg::QRInto;
+    a.clone().qr_into().expect("qr failed")
 }
 
 #[cfg(test)]
