@@ -46,6 +46,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Setup vcpkg (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: johnwason/vcpkg-action@v7
+        with:
+          triplet: x64-windows
+          vcpkgArguments: install openblas
+      - name: Configure vcpkg env (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "VCPKGRS_DYNAMIC=1" >> $Env:GITHUB_ENV
+          echo "VCPKG_DEFAULT_TRIPLET=x64-windows" >> $Env:GITHUB_ENV
       - name: Download fixtures
         uses: actions/download-artifact@v4
         with:
@@ -53,22 +64,28 @@ jobs:
           path: fixtures
       - name: Format check
         run: cargo fmt --all -- --check
-      - name: Clippy (non-Linux, no default features)
-        if: matrix.os != 'ubuntu-latest'
-        run: cargo clippy --workspace --no-default-features -- -D warnings
-      - name: Clippy (Linux, BLAS features)
+      - name: Clippy (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: cargo clippy --workspace --features blas -- -D warnings
-      - name: Build (no default features on non-Linux)
-        if: matrix.os != 'ubuntu-latest'
-        run: |
-          cargo build --workspace --no-default-features --verbose
-      - name: Test (no default features on non-Linux)
-        if: matrix.os != 'ubuntu-latest'
-        run: |
-          cargo test --workspace --no-default-features --verbose
-      - name: Build + Test with BLAS (Linux)
+        run: cargo clippy --workspace --features "blas,linux-blas" -- -D warnings
+      - name: Clippy (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cargo clippy --workspace --features "blas,macos-accelerate" -- -D warnings
+      - name: Clippy (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cargo clippy --workspace --features "blas,windows-openblas" -- -D warnings
+      - name: Build + Test (Linux, OpenBLAS static)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          cargo build --workspace --features blas --verbose
-          cargo test  --workspace --features blas --verbose
+          cargo build --workspace --features "blas,linux-blas" --verbose
+          cargo test  --workspace --features "blas,linux-blas" --verbose
+      - name: Build + Test (macOS, Accelerate)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cargo build --workspace --features "blas,macos-accelerate" --verbose
+          cargo test  --workspace --features "blas,macos-accelerate" --verbose
+      - name: Build + Test (Windows, OpenBLAS via vcpkg)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          cargo build --workspace --features "blas,windows-openblas" --verbose
+          cargo test  --workspace --features "blas,windows-openblas" --verbose
