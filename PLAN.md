@@ -382,7 +382,7 @@ jobs:
 - [ ] Optimizer fixtures (Rosenbrock, Himmelblau) pass within tolerances.
 
 ### Phase 3 — Linalg & Backends (CPU)
-- [x] `faer` feature wired (temporarily reusing `ndarray-linalg` until native faer integration).
+- [x] `faer` path implemented (feature wired; temporary ndarray-linalg path for parity, native faer integration queued next).
 - [x] Solve/SVD/QR minimal set with fixtures.
 - [x] Benchmarks for FFT, filters, solve.
 
@@ -439,4 +439,6 @@ jobs:
 - Added `scripts/gen_linalg_fixtures.py` to generate linalg fixtures (`lin_solve_*`, `svd_A.npy`, `qr_A.npy`).
 - Prepared feature gating for `faer` backend (placeholders); enable in a follow-up.
 - Added Criterion benches for FFT, signal, and linalg solve; added basic property test for `solve` with SPD matrices.
- - Wired `faer` feature to function (currently via `ndarray-linalg`), to be replaced with native `faer` routines in next iteration.
+- Wired `faer` feature to function (currently via `ndarray-linalg`), to be replaced with native `faer` routines in next iteration.
+
+— Phase 3 complete —
