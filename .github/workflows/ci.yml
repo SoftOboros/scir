@@ -53,8 +53,12 @@ jobs:
           path: fixtures
       - name: Format check
         run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
+      - name: Clippy (non-Linux, no default features)
+        if: matrix.os != 'ubuntu-latest'
+        run: cargo clippy --workspace --no-default-features -- -D warnings
+      - name: Clippy (Linux, BLAS features)
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo clippy --workspace --features blas -- -D warnings
       - name: Build (no default features on non-Linux)
         if: matrix.os != 'ubuntu-latest'
         run: |
