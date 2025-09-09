@@ -5,6 +5,8 @@ members = [
     "crates/scir-fft",
     "crates/scir-signal",
     "crates/scir-optimize",
+    "crates/scir-gpu",
+    "crates/scir",
 ]
 resolver = "2"
 exclude = [

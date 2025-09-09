@@ -387,8 +387,8 @@ jobs:
 - [x] Benchmarks for FFT, filters, solve.
 
 ### Phase 4 — GPU Foundations
-- [ ] `scir-gpu` device array abstraction + transfers.
-- [ ] CUDA elementwise + batched FIR with parity vs CPU.
+- [x] `scir-gpu` device array abstraction + transfers (CPU-backed, feature-gated CUDA stub).
+- [x] CUDA elementwise + batched FIR with parity vs CPU (PTX kernels + driver FFI; tests skip if no CUDA).
 - [ ] Self‑hosted GPU CI job green; docs for runner setup.
 
 ### Phase 5 — GPU FFT & GEMM
@@ -442,3 +442,19 @@ jobs:
 - Wired `faer` feature to function (currently via `ndarray-linalg`), to be replaced with native `faer` routines in next iteration.
 
 — Phase 3 complete —
+
+- Scaffolded `scir-gpu` crate with `DeviceArray` (shape, dtype, device), CPU transfers, elementwise ops, and batched FIR CPU baseline with tests (feature-gated CUDA stubs).
+- Added self-hosted GPU CI workflow skeleton (`.github/workflows/gpu.yml`) and runner setup guide (`docs/gpu-runner.md`).
+- Ran `cargo fmt --all` to align formatting.
+
+- Implemented minimal CUDA path (feature `cuda`) using Driver API + embedded PTX for f32 vector add, add-scalar, and batched FIR; tests skip if CUDA unavailable.
+- Added CodeBuild GPU `buildspec.gpu.yml` and docs on using a CUDA-enabled ECR image and privileged mode.
+- Enabled CUDA test step in `.github/workflows/gpu.yml` for self-hosted GPU runners.
+- Added automatic dispatch helpers: elementwise add/add-scalar and FIR can route to CUDA when device is `Cuda` (fallback to CPU if unavailable).
+- Added `ci/docker/Dockerfile.cuda` to build a CUDA+Rust image for CodeBuild; provided `ci/codebuild/project.example.json` and `docs/codebuild-gpu.md` with setup instructions.
+- Added umbrella crate `crates/scir` with aggregated `gpu` feature and example `fir_gpu.rs` showing CPU vs CUDA FIR.
+- Updated top-level README with umbrella crate usage, GPU feature instructions, CI runner and CodeBuild references.
+- Added crate READMEs: `crates/scir/README.md` and `crates/scir-gpu/README.md` for quick usage and feature overview.
+- Added examples: `crates/scir/examples/elementwise_gpu.rs` (CPU vs CUDA elementwise ops) alongside FIR demo.
+- CONTRIBUTING updated with a concise GPU testing section and links to GPU docs.
+- Added `crates/scir/examples/fir_bench.rs` for simple CPU vs CUDA timing using `Instant` (no extra deps). Aggregated feature alias `gpu-all` added in umbrella crate.

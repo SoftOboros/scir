@@ -1,0 +1,25 @@
+[package]
+name = "scir"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+# Aggregated GPU feature enabling CUDA in scir-gpu and GPU APIs in scir-signal
+gpu = ["scir-gpu/cuda", "scir-signal/gpu"]
+# Alias for enabling all GPU features across crates; currently same as `gpu`.
+gpu-all = ["gpu"]
+
+[dependencies]
+scir-core = { path = "../scir-core" }
+scir-nd = { path = "../scir-nd" }
+scir-fft = { path = "../scir-fft" }
+scir-signal = { path = "../scir-signal", default-features = false, features = [] }
+scir-gpu = { path = "../scir-gpu", default-features = false, features = [] }
+ndarray = "0.15"
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+scir-gpu = { path = "../scir-gpu" }

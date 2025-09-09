@@ -137,6 +137,18 @@ pub fn resample_poly(input: &Array1<f64>, up: usize, down: usize) -> Array1<f64>
     Array1::from(out)
 }
 
+// GPU-forwarded APIs (optional)
+#[cfg(feature = "gpu")]
+pub mod gpu {
+    use ndarray::{Array1, Array2};
+    use scir_gpu::{fir1d_batched_f32_auto, Device};
+
+    /// Batched FIR for f32 with device selection.
+    pub fn fir1d_batched_f32(x: &Array2<f32>, taps: &Array1<f32>, device: Device) -> Array2<f32> {
+        fir1d_batched_f32_auto(x, taps, device)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,5 +247,31 @@ mod tests {
                 .unwrap();
         let result = resample_poly(&input, 2, 3);
         assert_close!(&result, &expected, array, atol = 2e-2, rtol = 1e-6);
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn fir1d_batched_f32_auto_cpu_matches_naive() {
+        use crate::gpu::fir1d_batched_f32 as fir_auto;
+        use scir_gpu::Device;
+        let x: Array2<f32> = ndarray::array![[1.0, 2.0, 3.0, 4.0], [0.5, 0.0, -0.5, -1.0]];
+        let taps: Array1<f32> = ndarray::array![0.25, 0.5, 0.25];
+        let y = fir_auto(&x, &taps, Device::Cpu);
+        // naive reference
+        let (b, n) = x.dim();
+        let k = taps.len();
+        let mut y_ref = Array2::<f32>::zeros((b, n));
+        for bi in 0..b {
+            for i in 0..n {
+                let mut acc = 0.0f32;
+                let start = if i + 1 >= k { i + 1 - k } else { 0 };
+                for (t_idx, xi) in (start..=i).rev().enumerate() {
+                    let tap = taps[k - 1 - t_idx];
+                    acc += tap * x[[bi, xi]];
+                }
+                y_ref[[bi, i]] = acc;
+            }
+        }
+        assert_close!(&y.into_raw_vec(), &y_ref.into_raw_vec(), slice, tol = 0.0);
     }
 }

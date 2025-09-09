@@ -1,0 +1,18 @@
+name: gpu
+on:
+  push:
+  pull_request:
+
+jobs:
+  cuda-baseline:
+    # Avoid running on forks by default
+    if: github.event.pull_request.head.repo.fork == false || github.event_name == 'push'
+    runs-on: [self-hosted, linux, x64, gpu, nvidia]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: nvidia-smi
+      - name: Build CPU-backed GPU crate
+        run: cargo build -p scir-gpu --verbose
+      - name: Test CUDA feature
+        run: cargo test -p scir-gpu --features cuda -- --nocapture

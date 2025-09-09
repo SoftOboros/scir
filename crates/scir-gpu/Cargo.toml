@@ -1,0 +1,18 @@
+[package]
+name = "scir-gpu"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Placeholder feature flags for future backends. No deps added yet to avoid network fetches.
+cuda = []
+wgpu = []
+
+[dependencies]
+ndarray = { version = "0.15", default-features = false }
+num-traits = "0.2"
+
+[dev-dependencies]
+scir-core = { path = "../scir-core" }
+rand = "0.8"
+

@@ -8,6 +8,10 @@ license = "BSD-3-Clause"
 ndarray = "0.15"
 iir_filters = "0.1.3"
 scir-core = { path = "../scir-core" }
+scir-gpu = { path = "../scir-gpu", optional = true }
+
+[features]
+gpu = ["scir-gpu"]
 
 [dev-dependencies]
 ndarray-npy = "0.8"
