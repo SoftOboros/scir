@@ -5,8 +5,8 @@ on:
 
 jobs:
   cuda-baseline:
-    # Avoid running on forks by default
-    if: github.event.pull_request.head.repo.fork == false || github.event_name == 'push'
+    # Avoid running on forks; ensure Linux self-hosted + NVIDIA GPU
+    if: (github.event.pull_request.head.repo.fork == false || github.event_name == 'push') && runner.os == 'Linux'
     runs-on: [self-hosted, linux, x64, gpu, nvidia]
     steps:
       - uses: actions/checkout@v4
