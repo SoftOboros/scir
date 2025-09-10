@@ -8,7 +8,7 @@ license = "BSD-3-Clause"
 # No default to avoid unintended BLAS linkage in workspace builds.
 default = []
 blas = ["dep:ndarray-linalg"]
-faer = ["dep:faer"]
+faer = ["dep:faer", "dep:ndarray-linalg"]
 
 # OS-specific BLAS backends (choose exactly one in CI per OS)
 linux-blas = ["ndarray-linalg/openblas-static"]
