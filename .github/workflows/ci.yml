@@ -60,19 +60,39 @@ jobs:
         shell: bash
         run: |
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          if [ -n "${{ secrets.SCCACHE_BUCKET }}" ]; then echo "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" >> $GITHUB_ENV; fi
-          if [ -n "${{ secrets.SCCACHE_REGION }}" ]; then echo "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" >> $GITHUB_ENV; fi
           TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
           echo "SCCACHE_S3_KEY_PREFIX=/scir/${TRIPLE}" >> $GITHUB_ENV
+          # Enable S3 backend only if credentials and bucket/region are present; else use local disk cache
+          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ] && [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ] \
+             && [ -n "${{ secrets.SCCACHE_BUCKET }}" ] && [ -n "${{ secrets.SCCACHE_REGION }}" ]; then
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+            echo "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" >> $GITHUB_ENV
+            echo "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" >> $GITHUB_ENV
+          else
+            echo "SCCACHE_DIR=$RUNNER_TEMP/sccache" >> $GITHUB_ENV
+            echo "SCCACHE_CACHE_SIZE=5G" >> $GITHUB_ENV
+            mkdir -p "$RUNNER_TEMP/sccache"
+          fi
       - name: Setup sccache env (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           "RUSTC_WRAPPER=sccache" | Out-File -FilePath $env:GITHUB_ENV -Append
-          if ('${{ secrets.SCCACHE_BUCKET }}' -ne '') { "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" | Out-File -FilePath $env:GITHUB_ENV -Append }
-          if ('${{ secrets.SCCACHE_REGION }}' -ne '') { "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" | Out-File -FilePath $env:GITHUB_ENV -Append }
           $triple = (& rustc -vV) -split "`n" | Where-Object { $_ -like 'host: *' } | ForEach-Object { ($_ -split ':')[1].Trim() }
           "SCCACHE_S3_KEY_PREFIX=/scir/$triple" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Enable S3 backend only if credentials and bucket/region are present; else use local disk cache
+          if ('${{ secrets.AWS_ACCESS_KEY_ID }}' -ne '' -and '${{ secrets.AWS_SECRET_ACCESS_KEY }}' -ne '' -and '${{ secrets.SCCACHE_BUCKET }}' -ne '' -and '${{ secrets.SCCACHE_REGION }}' -ne '') {
+            "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } else {
+            $localCache = "$env:RUNNER_TEMP\\sccache"
+            New-Item -ItemType Directory -Force -Path $localCache | Out-Null
+            "SCCACHE_DIR=$localCache" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "SCCACHE_CACHE_SIZE=5G" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
       - name: Start sccache server
         run: sccache --start-server || true
       - name: Warm sccache (quick check)
