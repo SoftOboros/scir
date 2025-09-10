@@ -53,6 +53,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Determine host triple (Unix)
+        id: host_unix
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          triple=$(rustc -vV | sed -n 's/^host: //p')
+          echo "triple=$triple" >> $GITHUB_OUTPUT
+      - name: Determine host triple (Windows)
+        id: host_win
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $triple = (& rustc -vV) -split "`n" | Where-Object { $_ -like 'host: *' } | ForEach-Object { ($_ -split ':')[1].Trim() }
+          "triple=$triple" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       - name: Configure AWS credentials (OIDC)
         env:
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -77,8 +91,7 @@ jobs:
         shell: bash
         run: |
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
-          echo "SCCACHE_S3_KEY_PREFIX=/scir/${TRIPLE}" >> $GITHUB_ENV
+          echo "SCCACHE_S3_KEY_PREFIX=/scir/${{ steps.host_unix.outputs.triple }}" >> $GITHUB_ENV
           # Enable S3 backend only if credentials and bucket/region are present; else use local disk cache
           if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ] && [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ] \
              && [ -n "${{ secrets.SCCACHE_BUCKET }}" ] && [ -n "${{ secrets.SCCACHE_REGION }}" ]; then
@@ -87,17 +100,22 @@ jobs:
             echo "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" >> $GITHUB_ENV
             echo "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" >> $GITHUB_ENV
           else
-            echo "SCCACHE_DIR=$RUNNER_TEMP/sccache" >> $GITHUB_ENV
+            # Use stable per-OS cache dir for Actions cache
+            if [ "${{ matrix.os }}" = "macos-latest" ]; then
+              echo "SCCACHE_DIR=$HOME/Library/Caches/Mozilla.sccache" >> $GITHUB_ENV
+              mkdir -p "$HOME/Library/Caches/Mozilla.sccache"
+            else
+              echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+              mkdir -p "$HOME/.cache/sccache"
+            fi
             echo "SCCACHE_CACHE_SIZE=5G" >> $GITHUB_ENV
-            mkdir -p "$RUNNER_TEMP/sccache"
           fi
       - name: Setup sccache env (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           "RUSTC_WRAPPER=sccache" | Out-File -FilePath $env:GITHUB_ENV -Append
-          $triple = (& rustc -vV) -split "`n" | Where-Object { $_ -like 'host: *' } | ForEach-Object { ($_ -split ':')[1].Trim() }
-          "SCCACHE_S3_KEY_PREFIX=/scir/$triple" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SCCACHE_S3_KEY_PREFIX=/scir/${{ steps.host_win.outputs.triple }}" | Out-File -FilePath $env:GITHUB_ENV -Append
           # Enable S3 backend only if credentials and bucket/region are present; else use local disk cache
           if ('${{ secrets.AWS_ACCESS_KEY_ID }}' -ne '' -and '${{ secrets.AWS_SECRET_ACCESS_KEY }}' -ne '' -and '${{ secrets.SCCACHE_BUCKET }}' -ne '' -and '${{ secrets.SCCACHE_REGION }}' -ne '') {
             "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -105,7 +123,8 @@ jobs:
             "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" | Out-File -FilePath $env:GITHUB_ENV -Append
             "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" | Out-File -FilePath $env:GITHUB_ENV -Append
           } else {
-            $localCache = "$env:RUNNER_TEMP\\sccache"
+            # Use stable per-OS cache dir for Actions cache
+            $localCache = "$env:LOCALAPPDATA\\Mozilla\\sccache"
             New-Item -ItemType Directory -Force -Path $localCache | Out-Null
             "SCCACHE_DIR=$localCache" | Out-File -FilePath $env:GITHUB_ENV -Append
             "SCCACHE_CACHE_SIZE=5G" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -124,9 +143,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/sccache
-          key: sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          key: sccache-${{ steps.host_unix.outputs.triple }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            sccache-${{ runner.os }}-
+            sccache-${{ steps.host_unix.outputs.triple }}-
+      - name: Cache sccache dir (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Mozilla.sccache
+          key: sccache-${{ steps.host_unix.outputs.triple }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            sccache-${{ steps.host_unix.outputs.triple }}-
+      - name: Cache sccache dir (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v4
+        with:
+          path: $LOCALAPPDATA\Mozilla\sccache
+          key: sccache-${{ steps.host_win.outputs.triple }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            sccache-${{ steps.host_win.outputs.triple }}-
       - name: Show sccache backend
         if: always()
         shell: bash
