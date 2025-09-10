@@ -5,8 +5,8 @@ on:
 
 jobs:
   cuda-baseline:
-    # Avoid running on forks; ensure Linux self-hosted + NVIDIA GPU
-    if: github.event.pull_request.head.repo.fork == false && runner.os == 'Linux'
+    # Avoid running on forks; ensure self-hosted NVIDIA GPU runners via labels
+    if: github.event.pull_request.head.repo.fork == false
     runs-on: [self-hosted, linux, x64, gpu, nvidia]
     env:
       ENABLE_GPU_CI: ${{ secrets.ENABLE_GPU_CI }}

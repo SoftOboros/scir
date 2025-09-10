@@ -42,6 +42,12 @@ echo "Crates to publish (ordered): ${changed[*]}"
 
 for crate in "${changed[@]}"; do
   echo "::group::Publish $crate"
+  # Skip crates explicitly marked as non-publishable
+  if grep -qE '^publish\s*=\s*false' "crates/${crate}/Cargo.toml" 2>/dev/null; then
+    echo "Skipping $crate (publish = false)"
+    echo "::endgroup::"
+    continue
+  fi
   # Try publish; allow failures to be bypassed with a message
   if ! cargo publish -p "$crate" --token "${CARGO_REGISTRY_TOKEN:-}" --no-verify; then
     echo "⚠️ publish $crate failed (likely due to path dependencies or prior version). Skipping."

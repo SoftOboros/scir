@@ -12,3 +12,12 @@ resolver = "2"
 exclude = [
     "crates/scir-linalg",
 ]
+
+[patch.crates-io]
+scir-core = { path = "crates/scir-core" }
+scir-nd = { path = "crates/scir-nd" }
+scir-fft = { path = "crates/scir-fft" }
+scir-signal = { path = "crates/scir-signal" }
+scir-optimize = { path = "crates/scir-optimize" }
+scir-gpu = { path = "crates/scir-gpu" }
+scir = { path = "crates/scir" }
