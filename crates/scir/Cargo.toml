@@ -10,6 +10,7 @@ documentation = "https://docs.rs/scir"
 readme = "README.md"
 keywords = ["scir","scipy","rust","gpu","ndarray"]
 categories = ["science","mathematics"]
+publish = false
 
 [features]
 default = []
