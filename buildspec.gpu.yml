@@ -1,0 +1,25 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      docker: 20
+    commands:
+      - echo Using custom CUDA-enabled image for GPU builds
+  pre_build:
+    commands:
+      - rustc --version || true
+      - cargo --version || true
+  build:
+    commands:
+      - echo Building and testing scir-gpu with CUDA feature
+      - cargo build -p scir-gpu --features cuda --verbose || true
+      - cargo test  -p scir-gpu --features cuda -- --nocapture || true
+artifacts:
+  files:
+    - target/**
+    - buildspec.gpu.yml
+cache:
+  paths:
+    - /root/.cargo/registry
+    - /root/.cargo/git

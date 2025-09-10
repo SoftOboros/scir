@@ -1,0 +1,28 @@
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    RUSTUP_HOME=/opt/rust/rustup \
+    CARGO_HOME=/opt/rust/cargo \
+    PATH=/opt/rust/cargo/bin:/opt/venv/bin:/usr/local/cuda/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    pkg-config \
+    python3 \
+    python3-venv \
+    sccache \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install rustup + stable toolchain with fmt/clippy
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable \
+    && . /opt/rust/cargo/env \
+    && rustup component add rustfmt clippy
+
+# Optional: create a venv for Python fixtures/tools
+RUN python3 -m venv /opt/venv
+
+WORKDIR /workspace
+CMD ["bash"]

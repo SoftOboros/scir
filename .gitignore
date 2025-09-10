@@ -1,9 +1,24 @@
-/target
-/Cargo.lock
+## Rust build outputs
+# Ignore root and nested target dirs
+target/
+**/target/
+
+## Cargo lockfiles
+# Ignore nested Cargo.lock files but keep the root
+**/Cargo.lock
+!/Cargo.lock
 **/*.rs.bk
 /coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+__pycache__/
+.mypy_cache/
+.ruff_cache/
 .envrc
 venv
+.venv/
 .DS_Store
 **/*.map
 **/sorted_symbols.txt
@@ -13,3 +28,17 @@ venv
 codex_state/
 .codex/
 venv/
+.idea/
+.vscode/
+node_modules/
+*.log
+
+# Generated test fixtures and data
+fixtures/
+.ipynb_checkpoints/
+
+# Local build/output dirs some tools may create
+dist/
+build/
+out/
+tmp/

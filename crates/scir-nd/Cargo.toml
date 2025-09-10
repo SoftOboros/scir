@@ -1,7 +1,15 @@
 [package]
 name = "scir-nd"
-version = "0.0.0"
+version = "0.3.0"
 edition = "2021"
+license = "MIT"
+description = "ndarray interop for SciR: clean shape/stride conversions and helpers so compute crates focus on math."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-nd"
+readme = "README.md"
+keywords = ["scir","scipy","ndarray","numeric"]
+categories = ["science","mathematics"]
 
 [dependencies]
 ndarray = "0.15"

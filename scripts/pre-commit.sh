@@ -10,13 +10,10 @@ cargo clippy --workspace -- -D warnings
 
 echo "[phase 2] build+test: creator CLI"
 
-echo "[phase 4] docs (nightly)"
-export ARTIFACTS_INCLUDE_DIR="$(pwd)/scripts/artifacts/include"
-export ARTIFACTS_LIB_DIR="$(pwd)/scripts/artifacts/lib"
-export ARTIFACTS_LIB64_DIR="$ARTIFACTS_LIB_DIR"
-RUSTDOCFLAGS="--cfg docsrs --cfg nightly" \
-    cargo +nightly doc \
-    --no-deps
+echo "[phase 2] docs (stable, deny missing docs)"
+# Deny all rustdoc warnings and missing docs on public items
+export RUSTDOCFLAGS="-D warnings -D missing-docs -D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls"
+cargo doc -p scir-core -p scir-nd -p scir-fft -p scir-signal -p scir-optimize -p scir-gpu -p scir --no-deps
 
 
 echo "pre-commit: all phases completed"

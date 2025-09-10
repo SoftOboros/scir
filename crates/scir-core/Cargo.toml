@@ -1,7 +1,15 @@
 [package]
 name = "scir-core"
-version = "0.0.0"
+version = "0.3.0"
 edition = "2021"
+license = "MIT"
+description = "SciR core utilities: numeric tolerances, complex helpers, and shared test macros for the SciR ecosystem (SciPy rebuilt for Rust)."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-core"
+readme = "README.md"
+keywords = ["scir","scipy","numeric","ndarray","testing"]
+categories = ["science","mathematics"]
 
 [lib]
 path = "src/lib.rs"

@@ -1,0 +1,28 @@
+{
+  "name": "scir-gpu",
+  "description": "CodeBuild project to run scir-gpu CUDA tests",
+  "source": {
+    "type": "GITHUB",
+    "location": "https://github.com/YOUR_ORG/scir.git"
+  },
+  "artifacts": { "type": "NO_ARTIFACTS" },
+  "environment": {
+    "type": "LINUX_CONTAINER",
+    "image": "YOUR_AWS_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/scir-cuda-rust:latest",
+    "computeType": "BUILD_GENERAL1_LARGE",
+    "privilegedMode": true,
+    "environmentVariables": [
+      {"name": "RUST_LOG", "value": "info"}
+    ]
+  },
+  "serviceRole": "arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/codebuild-service-role",
+  "timeoutInMinutes": 60,
+  "queuedTimeoutInMinutes": 120,
+  "badgeEnabled": false,
+  "logsConfig": {
+    "cloudWatchLogs": { "status": "ENABLED" }
+  },
+  "sourceVersion": "main",
+  "buildspec": "buildspec.gpu.yml"
+}
+

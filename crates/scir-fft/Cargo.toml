@@ -1,8 +1,15 @@
 [package]
 name = "scir-fft"
-version = "0.0.0"
+version = "0.3.0"
 edition = "2021"
-license = "BSD-3-Clause"
+license = "MIT"
+description = "SciR FFT: parity-first FFT/RFFT/IRFFT with fixture-based testing and rustfft/realfft backends."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-fft"
+readme = "README.md"
+keywords = ["scir","scipy","fft","rustfft","numeric"]
+categories = ["science","mathematics"]
 
 [dependencies]
 ndarray = "0.15"

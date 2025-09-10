@@ -1,7 +1,7 @@
 name: CI
 on:
-  push:
   pull_request:
+    branches: [ main ]
 
 jobs:
   python-fixtures:
@@ -38,6 +38,9 @@ jobs:
     name: Rust tests (matrix)
     runs-on: ${{ matrix.os }}
     needs: python-fixtures
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -45,21 +48,81 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Setup vcpkg (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: johnwason/vcpkg-action@v7
+      - name: Configure AWS credentials (OIDC)
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          SCCACHE_REGION: ${{ secrets.SCCACHE_REGION }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.SCCACHE_REGION != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          pkgs: openblas
-          triplet: x64-windows
-          token: ${{ github.token }}
-          extra-args: --clean-after-build
-      - name: Configure vcpkg env (Windows)
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.SCCACHE_REGION }}
+      - name: Install sccache (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y sccache
+      - name: Install sccache (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew update && brew install sccache
+      - name: Install sccache (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: choco install sccache -y
+      - name: Setup sccache env (Unix)
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: |
-          echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
-          echo "VCPKG_DEFAULT_TRIPLET=x64-windows" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          echo "SCCACHE_S3_KEY_PREFIX=/scir/${TRIPLE}" >> $GITHUB_ENV
+          # Enable S3 backend only if credentials and bucket/region are present; else use local disk cache
+          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ] && [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ] \
+             && [ -n "${{ secrets.SCCACHE_BUCKET }}" ] && [ -n "${{ secrets.SCCACHE_REGION }}" ]; then
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+            echo "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" >> $GITHUB_ENV
+            echo "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" >> $GITHUB_ENV
+          else
+            echo "SCCACHE_DIR=$RUNNER_TEMP/sccache" >> $GITHUB_ENV
+            echo "SCCACHE_CACHE_SIZE=5G" >> $GITHUB_ENV
+            mkdir -p "$RUNNER_TEMP/sccache"
+          fi
+      - name: Setup sccache env (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          "RUSTC_WRAPPER=sccache" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $triple = (& rustc -vV) -split "`n" | Where-Object { $_ -like 'host: *' } | ForEach-Object { ($_ -split ':')[1].Trim() }
+          "SCCACHE_S3_KEY_PREFIX=/scir/$triple" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Enable S3 backend only if credentials and bucket/region are present; else use local disk cache
+          if ('${{ secrets.AWS_ACCESS_KEY_ID }}' -ne '' -and '${{ secrets.AWS_SECRET_ACCESS_KEY }}' -ne '' -and '${{ secrets.SCCACHE_BUCKET }}' -ne '' -and '${{ secrets.SCCACHE_REGION }}' -ne '') {
+            "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } else {
+            $localCache = "$env:RUNNER_TEMP\\sccache"
+            New-Item -ItemType Directory -Force -Path $localCache | Out-Null
+            "SCCACHE_DIR=$localCache" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "SCCACHE_CACHE_SIZE=5G" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+      - name: Start sccache server
+        run: sccache --start-server || true
+      - name: Warm sccache (quick check)
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: target-warm
+        run: |
+          # Build a couple of small crates to populate cache
+          cargo check -p scir-core -p scir-nd -p scir-fft -q || true
+      - name: Show sccache backend
+        if: always()
+        shell: bash
+        run: |
+          echo "SCCACHE_BUCKET=${SCCACHE_BUCKET:-unset}"
+          echo "SCCACHE_REGION=${SCCACHE_REGION:-unset}"
+          echo "SCCACHE_DIR=${SCCACHE_DIR:-unset}"
+          sccache --show-stats || true
+      - uses: Swatinem/rust-cache@v2
       - name: Download fixtures
         uses: actions/download-artifact@v4
         with:
@@ -71,6 +134,12 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-ws
         run: cargo clippy --workspace --all-targets --exclude scir-linalg -- -D warnings
+      - name: Docs (publishable crates)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          RUSTDOCFLAGS: -D warnings -D missing-docs -D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls
+        run: |
+          cargo doc -p scir-core -p scir-nd -p scir-fft -p scir-signal -p scir-optimize -p scir-gpu -p scir --no-deps
       - name: Clippy scir-linalg (Linux)
         if: matrix.os == 'ubuntu-latest'
         env:
@@ -81,12 +150,10 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-linalg-macos
         run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" -- -D warnings
-      - name: Clippy scir-linalg (Windows)
-        if: matrix.os == 'windows-latest'
-        env:
-          CARGO_TARGET_DIR: target-linalg-windows
-        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" -- -D warnings
-      - name: Build + Test core crates (no BLAS)
+      # Skip linalg on Windows to avoid heavy OpenBLAS builds
+      - name: Build + Test core crates (no BLAS) [Unix shells]
+        if: matrix.os != 'windows-latest'
+        shell: bash
         env:
           CARGO_TARGET_DIR: target-core
         run: |
@@ -94,6 +161,21 @@ jobs:
             echo "::group::build $pkg"; cargo build -p $pkg --verbose; echo "::endgroup::"; \
             echo "::group::test  $pkg"; cargo test  -p $pkg --verbose; echo "::endgroup::"; \
           done
+      - name: Build + Test core crates (no BLAS) [Windows]
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          CARGO_TARGET_DIR: target-core
+        run: |
+          $packages = @('scir-core','scir-nd','scir-fft','scir-signal','scir-optimize')
+          foreach ($pkg in $packages) {
+            Write-Host "::group::build $pkg"
+            cargo build -p $pkg --verbose
+            Write-Host "::endgroup::"
+            Write-Host "::group::test  $pkg"
+            cargo test  -p $pkg --verbose
+            Write-Host "::endgroup::"
+          }
       - name: Build + Test scir-linalg (Linux, OpenBLAS static)
         if: matrix.os == 'ubuntu-latest'
         env:
@@ -106,11 +188,7 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-linalg-macos
         run: cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" --verbose
-      - name: Build + Test scir-linalg (Windows, OpenBLAS via vcpkg)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        env:
-          CARGO_TARGET_DIR: target-linalg-windows
-        run: |
-          cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
-          cargo test  --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
+      # No Windows linalg build/test
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true

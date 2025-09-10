@@ -1,0 +1,20 @@
+# Ignore VCS metadata and build outputs
+.git
+target
+**/target
+**/Cargo.lock
+!/Cargo.lock
+fixtures
+.pytest_cache
+__pycache__
+.mypy_cache
+.ruff_cache
+.DS_Store
+node_modules
+dist
+build
+out
+tmp
+.idea
+.vscode
+

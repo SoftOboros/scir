@@ -1,0 +1,25 @@
+[package]
+name = "scir-gpu"
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+description = "SciR GPU foundations: device arrays and CUDA (feature-gated) elementwise/FIR kernels with CPU parity."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-gpu"
+readme = "README.md"
+keywords = ["scir","scipy","cuda","gpu","wgpu"]
+categories = ["science","mathematics"]
+
+[features]
+# Placeholder feature flags for future backends. No deps added yet to avoid network fetches.
+cuda = []
+wgpu = []
+
+[dependencies]
+ndarray = { version = "0.15", default-features = false }
+num-traits = "0.2"
+
+[dev-dependencies]
+scir-core = { path = "../scir-core" }
+rand = "0.8"
