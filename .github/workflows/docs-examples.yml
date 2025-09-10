@@ -1,0 +1,16 @@
+name: docs-examples
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  nightly-doc-examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Docs (nightly rustdoc lints for code examples)
+        env:
+          RUSTDOCFLAGS: -Z unstable-options -D rustdoc::missing_doc_code_examples -D warnings -D rustdoc::broken_intra_doc_links
+        run: |
+          cargo +nightly doc -p scir-core -p scir-nd -p scir-fft -p scir-signal -p scir-optimize --no-deps

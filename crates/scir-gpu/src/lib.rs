@@ -1,26 +1,36 @@
 //! GPU Foundations: device array abstraction and CPU-backed baseline ops.
+#![deny(missing_docs)]
 
 use ndarray::{Array1, Array2, Axis};
 use num_traits::NumAssign;
 use std::error::Error;
 use std::fmt;
 
+/// Supported data types for device arrays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DType {
+    /// 32-bit floating point
     F32,
+    /// 64-bit floating point
     F64,
 }
 
+/// Execution device selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Device {
+    /// Host CPU device
     Cpu,
     #[cfg(feature = "cuda")]
+    /// NVIDIA CUDA device (feature `cuda`)
     Cuda,
 }
 
+/// GPU-related error types.
 #[derive(Debug)]
 pub enum GpuError {
+    /// Backend is not available on this build or platform.
     BackendUnavailable(&'static str),
+    /// Operation failed due to incompatible shapes.
     ShapeMismatch,
 }
 
@@ -46,6 +56,7 @@ pub struct DeviceArray<T> {
 }
 
 impl<T: Copy> DeviceArray<T> {
+    /// Create a `DeviceArray` from a CPU slice and explicit shape/dtype.
     pub fn from_cpu_slice(shape: &[usize], dtype: DType, data: &[T]) -> Self {
         assert_eq!(shape.iter().product::<usize>(), data.len());
         Self {
@@ -56,18 +67,22 @@ impl<T: Copy> DeviceArray<T> {
         }
     }
 
+    /// Copy data back to a CPU-owned `Vec<T>`.
     pub fn to_cpu_vec(&self) -> Vec<T> {
         self.host.clone()
     }
 
+    /// Return the logical shape of the array.
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
 
+    /// Return the element data type.
     pub fn dtype(&self) -> DType {
         self.dtype
     }
 
+    /// Return the current device of this array.
     pub fn device(&self) -> Device {
         self.device
     }
@@ -75,6 +90,7 @@ impl<T: Copy> DeviceArray<T> {
 
 impl<T: Copy> DeviceArray<T> {
     #[cfg(feature = "cuda")]
+    /// Move the array to a device (CPU or CUDA if enabled).
     pub fn to_device(&mut self, device: Device) -> Result<(), GpuError> {
         match device {
             Device::Cpu => {
@@ -90,6 +106,7 @@ impl<T: Copy> DeviceArray<T> {
     }
 
     #[cfg(not(feature = "cuda"))]
+    /// Move the array to a device (CPU only, when CUDA is disabled).
     pub fn to_device(&mut self, device: Device) -> Result<(), GpuError> {
         match device {
             Device::Cpu => {
@@ -105,6 +122,7 @@ impl<T> DeviceArray<T>
 where
     T: Copy + NumAssign,
 {
+    /// Add a scalar to each element (CPU baseline).
     pub fn add_scalar(&self, alpha: T) -> Self {
         let mut out = self.clone();
         for v in &mut out.host {
@@ -113,6 +131,7 @@ where
         out
     }
 
+    /// Multiply each element by a scalar (CPU baseline).
     pub fn mul_scalar(&self, alpha: T) -> Self {
         let mut out = self.clone();
         for v in &mut out.host {
@@ -126,6 +145,7 @@ impl<T> DeviceArray<T>
 where
     T: Copy + NumAssign,
 {
+    /// Elementwise addition between arrays (CPU baseline).
     pub fn add(&self, other: &Self) -> Result<Self, GpuError> {
         if self.shape != other.shape {
             return Err(GpuError::ShapeMismatch);
@@ -225,7 +245,9 @@ impl DeviceArray<f32> {
 }
 
 /// Dispatch FIR to CUDA if requested; otherwise use CPU baseline.
+/// FIR over each row of `x` using `taps` with device dispatch (CUDA when available).
 pub fn fir1d_batched_f32_auto(x: &Array2<f32>, taps: &Array1<f32>, device: Device) -> Array2<f32> {
+    /// FIR over each row of `x` using `taps` with device dispatch (CUDA when available).
     #[cfg(feature = "cuda")]
     {
         return match device {
@@ -812,7 +834,9 @@ L_DONE:
 #[cfg(feature = "cuda")]
 pub use cuda::{add_scalar_f32_cuda, add_vec_f32_cuda, mul_scalar_f32_cuda};
 
-// Simple batched 1D FIR (CPU). Shape is (batch, n).
+/// Causal FIR over each row of `x` using `taps` (CPU baseline, f32).
+///
+/// Input shape is `(batch, n)` and the same shape is returned.
 pub fn fir1d_batched_f32(x: &Array2<f32>, taps: &Array1<f32>) -> Array2<f32> {
     let (b, n) = x.dim();
     let k = taps.len();
@@ -833,6 +857,9 @@ pub fn fir1d_batched_f32(x: &Array2<f32>, taps: &Array1<f32>) -> Array2<f32> {
     y
 }
 
+/// Causal FIR over each row of `x` using `taps` (CPU baseline, f64).
+///
+/// Input shape is `(batch, n)` and the same shape is returned.
 pub fn fir1d_batched_f64(x: &Array2<f64>, taps: &Array1<f64>) -> Array2<f64> {
     let (b, n) = x.dim();
     let k = taps.len();

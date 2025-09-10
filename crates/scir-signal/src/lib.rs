@@ -1,4 +1,5 @@
-//! Signal processing utilities for SciR
+//! Signal processing utilities for SciR.
+#![deny(missing_docs)]
 
 use iir_filters::{
     filter::{DirectForm2Transposed, Filter},
@@ -10,12 +11,25 @@ use ndarray::Array1;
 pub use iir_filters::sos::Sos;
 
 /// Design a Butterworth low-pass filter and return SOS.
+///
+/// # Examples
+/// ```
+/// let sos = scir_signal::butter(4, 0.2);
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let _y = scir_signal::sosfilt(&sos, &x);
+/// ```
 pub fn butter(order: u32, cutoff: f64) -> Sos {
     let zpk = design_butter(order, FilterType::LowPass(cutoff), 2.0).unwrap();
     zpk2sos(&zpk, None).unwrap()
 }
 
 /// Return a Chebyshev Type I low-pass filter (order=4, ripple=1, cutoff=0.2).
+///
+/// # Examples
+/// ```
+/// let sos = scir_signal::cheby1(4, 1.0, 0.2);
+/// assert!(sos.sections().len() >= 1);
+/// ```
 pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
     assert!(order == 4 && (ripple - 1.0).abs() < 1e-12 && (cutoff - 0.2).abs() < 1e-12);
     Sos::from_vec(vec![
@@ -32,6 +46,12 @@ pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
 }
 
 /// Return a Bessel low-pass filter (order=4, cutoff=0.2).
+///
+/// # Examples
+/// ```
+/// let sos = scir_signal::bessel(4, 0.2);
+/// assert!(sos.sections().len() >= 1);
+/// ```
 pub fn bessel(order: u32, cutoff: f64) -> Sos {
     assert!(order == 4 && (cutoff - 0.2).abs() < 1e-12);
     Sos::from_vec(vec![
@@ -48,6 +68,14 @@ pub fn bessel(order: u32, cutoff: f64) -> Sos {
 }
 
 /// Apply a second-order-section filter to input data.
+///
+/// # Examples
+/// ```
+/// let sos = scir_signal::butter(2, 0.2);
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let y = scir_signal::sosfilt(&sos, &x);
+/// assert_eq!(y.len(), x.len());
+/// ```
 pub fn sosfilt(sos: &Sos, input: &Array1<f64>) -> Array1<f64> {
     let mut df = DirectForm2Transposed::new(sos);
     let mut out = Vec::with_capacity(input.len());
@@ -58,6 +86,14 @@ pub fn sosfilt(sos: &Sos, input: &Array1<f64>) -> Array1<f64> {
 }
 
 /// Zero-phase filtering by applying `sosfilt` forward and backward.
+///
+/// # Examples
+/// ```
+/// let sos = scir_signal::butter(2, 0.2);
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let y = scir_signal::filtfilt(&sos, &x);
+/// assert_eq!(y.len(), x.len());
+/// ```
 pub fn filtfilt(sos: &Sos, input: &Array1<f64>) -> Array1<f64> {
     let mut df = DirectForm2Transposed::new(sos);
     let mut tmp = Vec::with_capacity(input.len());
@@ -86,6 +122,13 @@ fn convolve(x: &[f64], h: &[f64]) -> Vec<f64> {
 }
 
 /// Resample using polyphase filtering.
+///
+/// # Examples
+/// ```
+/// let x = ndarray::Array1::from_vec(vec![1.0, 2.0, 3.0, 4.0]);
+/// let y = scir_signal::resample_poly(&x, 2, 3);
+/// assert!(y.len() > 0);
+/// ```
 pub fn resample_poly(input: &Array1<f64>, up: usize, down: usize) -> Array1<f64> {
     assert!(up == 2 && down == 3);
     const H: [f64; 31] = [

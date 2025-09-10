@@ -1,4 +1,5 @@
-//! FFT utilities for SciR
+//! FFT utilities for SciR.
+#![deny(missing_docs)]
 
 use ndarray::Array1;
 use num_complex::Complex64;
@@ -6,6 +7,14 @@ use realfft::RealFftPlanner;
 use rustfft::FftPlanner;
 
 /// Compute the forward FFT of a real-valued array.
+///
+/// # Examples
+/// ```
+/// use ndarray::Array1;
+/// let x = Array1::from_vec(vec![0.0, 1.0, 0.0, -1.0]);
+/// let y = scir_fft::fft(&x);
+/// assert_eq!(y.len(), x.len());
+/// ```
 pub fn fft(input: &Array1<f64>) -> Array1<Complex64> {
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(input.len());
@@ -15,6 +24,15 @@ pub fn fft(input: &Array1<f64>) -> Array1<Complex64> {
 }
 
 /// Compute the inverse FFT of a complex-valued array.
+///
+/// # Examples
+/// ```
+/// use ndarray::Array1;
+/// use num_complex::Complex64;
+/// let x = Array1::from_vec(vec![Complex64::new(1.0,0.0); 4]);
+/// let y = scir_fft::ifft(&x);
+/// assert_eq!(y.len(), x.len());
+/// ```
 pub fn ifft(input: &Array1<Complex64>) -> Array1<Complex64> {
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_inverse(input.len());
@@ -25,6 +43,14 @@ pub fn ifft(input: &Array1<Complex64>) -> Array1<Complex64> {
 }
 
 /// Compute the forward real FFT of a real-valued array.
+///
+/// # Examples
+/// ```
+/// use ndarray::Array1;
+/// let x = Array1::from_vec(vec![0.0, 1.0, 0.0, -1.0]);
+/// let y = scir_fft::rfft(&x);
+/// assert!(y.len() >= 1);
+/// ```
 pub fn rfft(input: &Array1<f64>) -> Array1<Complex64> {
     let mut planner = RealFftPlanner::<f64>::new();
     let rfft = planner.plan_fft_forward(input.len());
@@ -35,6 +61,15 @@ pub fn rfft(input: &Array1<f64>) -> Array1<Complex64> {
 }
 
 /// Compute the inverse real FFT producing a real-valued array.
+///
+/// # Examples
+/// ```
+/// use ndarray::Array1;
+/// use num_complex::Complex64;
+/// let spec = Array1::from_vec(vec![Complex64::new(1.0,0.0); 3]);
+/// let x = scir_fft::irfft(&spec);
+/// assert!(x.len() >= 2);
+/// ```
 pub fn irfft(input: &Array1<Complex64>) -> Array1<f64> {
     let n = (input.len() - 1) * 2;
     let mut planner = RealFftPlanner::<f64>::new();

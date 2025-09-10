@@ -38,6 +38,9 @@ jobs:
     name: Rust tests (matrix)
     runs-on: ${{ matrix.os }}
     needs: python-fixtures
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +48,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' && secrets.SCCACHE_REGION != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.SCCACHE_REGION }}
       - name: Install sccache (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y sccache
@@ -102,6 +111,14 @@ jobs:
         run: |
           # Build a couple of small crates to populate cache
           cargo check -p scir-core -p scir-nd -p scir-fft -q || true
+      - name: Show sccache backend
+        if: always()
+        shell: bash
+        run: |
+          echo "SCCACHE_BUCKET=${SCCACHE_BUCKET:-unset}"
+          echo "SCCACHE_REGION=${SCCACHE_REGION:-unset}"
+          echo "SCCACHE_DIR=${SCCACHE_DIR:-unset}"
+          sccache --show-stats || true
       - uses: Swatinem/rust-cache@v2
       - name: Download fixtures
         uses: actions/download-artifact@v4
@@ -114,6 +131,12 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-ws
         run: cargo clippy --workspace --all-targets --exclude scir-linalg -- -D warnings
+      - name: Docs (publishable crates)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          RUSTDOCFLAGS: -D warnings -D missing-docs -D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls
+        run: |
+          cargo doc -p scir-core -p scir-nd -p scir-fft -p scir-signal -p scir-optimize -p scir-gpu -p scir --no-deps
       - name: Clippy scir-linalg (Linux)
         if: matrix.os == 'ubuntu-latest'
         env:

@@ -1,8 +1,14 @@
 [package]
 name = "scir-linalg"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
-license = "BSD-3-Clause"
+license = "MIT"
+description = "SciR Linalg: BLAS/LAPACK-backed and pure-Rust (faer) linear algebra building blocks. Not yet published."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-linalg"
+readme = "README.md"
+publish = false
 
 [features]
 # No default to avoid unintended BLAS linkage in workspace builds.

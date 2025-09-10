@@ -1,8 +1,20 @@
-//! Core utilities for SciR
+//! Core utilities for SciR.
+//!
+//! This crate provides shared numeric helpers and the `assert_close!` macro
+//! used across SciR crates to compare floating‑point (real/complex) values
+//! within absolute/relative tolerances.
+
+#![deny(missing_docs)]
 
 use ndarray::Array1;
 use num_complex::Complex64;
 
+/// Assert that two scalars are close within absolute (`atol`) and relative (`rtol`) tolerances.
+///
+/// # Examples
+/// ```
+/// scir_core::assert_close_scalar(1.0, 1.0 + 1e-9, 1e-8, 1e-8);
+/// ```
 pub fn assert_close_scalar(left: f64, right: f64, atol: f64, rtol: f64) {
     let diff = (left - right).abs();
     let tol = atol + rtol * right.abs();
@@ -12,6 +24,14 @@ pub fn assert_close_scalar(left: f64, right: f64, atol: f64, rtol: f64) {
     );
 }
 
+/// Assert that two `&[f64]` slices are elementwise close within tolerances.
+///
+/// # Examples
+/// ```
+/// let a = [1.0, 2.0, 3.0];
+/// let b = [1.0 + 1e-9, 2.0, 3.0];
+/// scir_core::assert_close_slice(&a, &b, 1e-8, 1e-8);
+/// ```
 pub fn assert_close_slice(left: &[f64], right: &[f64], atol: f64, rtol: f64) {
     assert_eq!(left.len(), right.len(), "length mismatch");
     for (l, r) in left.iter().zip(right.iter()) {
@@ -19,6 +39,15 @@ pub fn assert_close_slice(left: &[f64], right: &[f64], atol: f64, rtol: f64) {
     }
 }
 
+/// Assert that two `&[Complex64]` slices are elementwise close within tolerances (by magnitude).
+///
+/// # Examples
+/// ```
+/// use num_complex::Complex64;
+/// let a = [Complex64::new(1.0, 0.0)];
+/// let b = [Complex64::new(1.0 + 1e-12, 1e-12)];
+/// scir_core::assert_close_complex_slice(&a, &b, 1e-8, 1e-8);
+/// ```
 pub fn assert_close_complex_slice(left: &[Complex64], right: &[Complex64], atol: f64, rtol: f64) {
     assert_eq!(left.len(), right.len(), "length mismatch");
     for (l, r) in left.iter().zip(right.iter()) {
@@ -28,6 +57,15 @@ pub fn assert_close_complex_slice(left: &[Complex64], right: &[Complex64], atol:
     }
 }
 
+/// Assert that two `Array1<f64>` are elementwise close within tolerances.
+///
+/// # Examples
+/// ```
+/// use ndarray::Array1;
+/// let a = Array1::from_vec(vec![1.0, 2.0]);
+/// let b = Array1::from_vec(vec![1.0 + 1e-9, 2.0]);
+/// scir_core::assert_close_array1(&a, &b, 1e-8, 1e-8);
+/// ```
 pub fn assert_close_array1(left: &Array1<f64>, right: &Array1<f64>, atol: f64, rtol: f64) {
     assert_eq!(left.len(), right.len(), "length mismatch");
     for (l, r) in left.iter().zip(right.iter()) {
@@ -35,6 +73,16 @@ pub fn assert_close_array1(left: &Array1<f64>, right: &Array1<f64>, atol: f64, r
     }
 }
 
+/// Assert that two `Array1<Complex64>` are elementwise close within tolerances (by magnitude).
+///
+/// # Examples
+/// ```
+/// use ndarray::Array1;
+/// use num_complex::Complex64;
+/// let a = Array1::from_vec(vec![Complex64::new(1.0, 0.0)]);
+/// let b = Array1::from_vec(vec![Complex64::new(1.0 + 1e-12, 1e-12)]);
+/// scir_core::assert_close_complex_array1(&a, &b, 1e-8, 1e-8);
+/// ```
 pub fn assert_close_complex_array1(
     left: &Array1<Complex64>,
     right: &Array1<Complex64>,
@@ -49,6 +97,12 @@ pub fn assert_close_complex_array1(
     }
 }
 
+/// Assert numeric closeness with a flexible interface (scalars, slices, arrays, real/complex).
+///
+/// Examples:
+/// - `assert_close!(a, b, atol = 1e-8, rtol = 1e-8);`
+/// - `assert_close!(&xs, &ys, slice, tol = 1e-9);`
+/// - `assert_close!(&xa, &ya, complex_array, atol = 1e-9, rtol = 1e-9);`
 #[macro_export]
 macro_rules! assert_close {
     ($left:expr, $right:expr, atol = $atol:expr, rtol = $rtol:expr) => {{

@@ -241,17 +241,16 @@ jobs:
 - **OK:** Use third‑party crates with **permissive licenses** (MIT/Apache‑2.0/BSD‑2/3/ISC/Zlib). Avoid strong/viral copyleft.
 
 ### 10.2 Licensing for `scir`
-- Pick **one** license for all crates (recommend **Apache‑2.0** for patent grant; MIT also acceptable). Stay consistent repo‑wide.
+- Pick **one** license for all crates (**MIT**). Stay consistent repo‑wide.
 - Add SPDX headers to every source file:
   ```rust
   // SPDX-License-Identifier: Apache-2.0
   ```
 - `Cargo.toml` per crate:
   ```toml
-  license = "Apache-2.0"
-  # or: license = "MIT"
+  license = "MIT"
   ```
-- Top‑level `LICENSE` file matching the chosen license; no per‑crate divergence unless absolutely necessary.
+- Top‑level `LICENSE` file matching the chosen license; no per‑crate divergence.
 
 ### 10.3 Fixture Policy (SciPy as Oracle)
 - **Store with provenance** alongside each fixture batch (YAML or JSON):

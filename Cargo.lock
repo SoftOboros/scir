@@ -690,7 +690,7 @@ dependencies = [
 
 [[package]]
 name = "scir"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "ndarray",
  "rand",
@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "scir-core"
-version = "0.0.0"
+version = "0.3.0"
 dependencies = [
  "ndarray",
  "num-complex",
@@ -711,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "scir-fft"
-version = "0.0.0"
+version = "0.3.0"
 dependencies = [
  "criterion",
  "ndarray",
@@ -724,7 +724,7 @@ dependencies = [
 
 [[package]]
 name = "scir-gpu"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "ndarray",
  "num-traits",
@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "scir-nd"
-version = "0.0.0"
+version = "0.3.0"
 dependencies = [
  "ndarray",
  "scir-core",
@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "scir-optimize"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "ndarray",
  "ndarray-npy",
@@ -751,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "scir-signal"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "criterion",
  "iir_filters",

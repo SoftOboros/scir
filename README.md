@@ -2,6 +2,9 @@
 
 SciR aims to reimplement core pieces of SciPy in Rust with a parity-first approach and optional GPU backends.
 
+License
+- MIT. See the LICENSE file at the repository root. All crates declare `license = "MIT"` in their Cargo.toml.
+
 Quick start
 - Build workspace: `cargo build` (first run will fetch dependencies).
 - Run tests: `cargo test` (GPU tests are gated and skip without GPUs).

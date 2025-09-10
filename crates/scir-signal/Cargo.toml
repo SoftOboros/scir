@@ -1,8 +1,15 @@
 [package]
 name = "scir-signal"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
-license = "BSD-3-Clause"
+license = "MIT"
+description = "SciR Signal: Butterworth/Chebyshev/Bessel design, sosfilt/filtfilt, and resample_poly with fixture-driven parity to SciPy. Optional GPU-forwarded FIR."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-signal"
+readme = "README.md"
+keywords = ["scir","scipy","signal","filter","filtfilt"]
+categories = ["science","mathematics"]
 
 [dependencies]
 ndarray = "0.15"

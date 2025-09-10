@@ -1,8 +1,15 @@
 [package]
 name = "scir-optimize"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
-license = "BSD-3-Clause"
+license = "MIT"
+description = "SciR Optimize: Nelder–Mead, BFGS, and L-BFGS with fixture-driven validation on Rosenbrock/Himmelblau."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-optimize"
+readme = "README.md"
+keywords = ["scir","scipy","optimize","bfgs","nelder-mead"]
+categories = ["science","mathematics"]
 
 [dependencies]
 ndarray = "0.15"

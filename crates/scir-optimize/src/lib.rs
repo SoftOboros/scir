@@ -1,4 +1,5 @@
-//! Optimization routines for SciR
+//! Optimization routines for SciR.
+#![deny(missing_docs)]
 
 use ndarray::{Array1, Array2, Axis};
 

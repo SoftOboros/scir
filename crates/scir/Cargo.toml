@@ -1,7 +1,15 @@
 [package]
 name = "scir"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
+license = "MIT"
+description = "SciR: SciPy rebuilt for Rust — safe, fast, GPU‑ready. Parity-first APIs for FFT, signal, optimize, and more."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir"
+readme = "README.md"
+keywords = ["scir","scipy","rust","gpu","ndarray"]
+categories = ["science","mathematics"]
 
 [features]
 default = []
