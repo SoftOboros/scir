@@ -1,12 +1,12 @@
 name: gpu
 on:
-  push:
   pull_request:
+    branches: [ main ]
 
 jobs:
   cuda-baseline:
     # Avoid running on forks; ensure Linux self-hosted + NVIDIA GPU
-    if: (github.event.pull_request.head.repo.fork == false || github.event_name == 'push') && runner.os == 'Linux'
+    if: github.event.pull_request.head.repo.fork == false && runner.os == 'Linux'
     runs-on: [self-hosted, linux, x64, gpu, nvidia]
     steps:
       - uses: actions/checkout@v4

@@ -54,8 +54,7 @@ mod tests {
     use super::*;
     use ndarray::{Array1, Array2};
     use ndarray_npy::ReadNpyExt;
-    use proptest::prelude::*;
-    use rand::SeedableRng;
+    use rand::{Rng, SeedableRng};
     use scir_core::assert_close;
     use std::{fs::File, path::PathBuf};
 
@@ -130,10 +129,10 @@ mod tests {
             // 5x5 SPD matrix
             let m = 5usize;
             let n = 5usize;
-            let vals: Vec<f64> = (0..(m * n)).map(|_| rng.random::<f64>()).collect();
+            let vals: Vec<f64> = (0..(m * n)).map(|_| rng.gen::<f64>()).collect();
             let a_rand = Array2::from_shape_vec((m, n), vals).unwrap();
             let a = a_rand.t().dot(&a_rand) + Array2::<f64>::eye(m);
-            let b_vals: Vec<f64> = (0..m).map(|_| rng.random::<f64>()).collect();
+            let b_vals: Vec<f64> = (0..m).map(|_| rng.gen::<f64>()).collect();
             let b = Array1::from_vec(b_vals);
             let x = solve(&a, &b);
             let b_recon = a.dot(&x);

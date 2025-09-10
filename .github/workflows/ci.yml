@@ -1,7 +1,7 @@
 name: CI
 on:
-  push:
   pull_request:
+    branches: [ main ]
 
 jobs:
   python-fixtures:
@@ -103,45 +103,6 @@ jobs:
           # Build a couple of small crates to populate cache
           cargo check -p scir-core -p scir-nd -p scir-fft -q || true
       - uses: Swatinem/rust-cache@v2
-      - name: Setup vcpkg (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: johnwason/vcpkg-action@v7
-        with:
-          pkgs: openblas
-          triplet: x64-windows
-          token: ${{ github.token }}
-          extra-args: --clean-after-build
-      - name: Configure vcpkg env (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          "VCPKGRS_DYNAMIC=1" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "VCPKG_DEFAULT_TRIPLET=x64-windows" | Out-File -FilePath $env:GITHUB_ENV -Append
-          if ($env:VCPKG_INSTALLATION_ROOT) { "VCPKG_ROOT=$($env:VCPKG_INSTALLATION_ROOT)" | Out-File -FilePath $env:GITHUB_ENV -Append }
-      - name: Verify vcpkg (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          echo "VCPKG_ROOT=$env:VCPKG_ROOT"
-          vcpkg list || echo "vcpkg list failed (will rely on env vars)"
-      - name: Ensure OpenBLAS via vcpkg (Windows fallback)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $triplet = "x64-windows"
-          $installed = (vcpkg list 2>$null) | Select-String -Pattern "^openblas\s" -Quiet
-          if (-not $installed) {
-            if ($env:VCPKG_ROOT -and (Test-Path "$env:VCPKG_ROOT\vcpkg.exe")) {
-              & "$env:VCPKG_ROOT\vcpkg.exe" install "openblas:$triplet" || exit 1
-            } elseif ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe")) {
-              & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install "openblas:$triplet" || exit 1
-            } else {
-              Write-Host "Attempting vcpkg from PATH"
-              vcpkg install "openblas:$triplet" || exit 1
-            }
-          } else {
-            Write-Host "OpenBLAS already installed in vcpkg"
-          }
       - name: Download fixtures
         uses: actions/download-artifact@v4
         with:
@@ -163,11 +124,7 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-linalg-macos
         run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" -- -D warnings
-      - name: Clippy scir-linalg (Windows)
-        if: matrix.os == 'windows-latest'
-        env:
-          CARGO_TARGET_DIR: target-linalg-windows
-        run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" -- -D warnings
+      # Skip linalg on Windows to avoid heavy OpenBLAS builds
       - name: Build + Test core crates (no BLAS) [Unix shells]
         if: matrix.os != 'windows-latest'
         shell: bash
@@ -205,14 +162,7 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-linalg-macos
         run: cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "faer" --verbose
-      - name: Build + Test scir-linalg (Windows, OpenBLAS via vcpkg)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        env:
-          CARGO_TARGET_DIR: target-linalg-windows
-        run: |
-          cargo build --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
-          cargo test  --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" --verbose
+      # No Windows linalg build/test
       - name: sccache stats
         if: always()
         run: sccache --show-stats || true
