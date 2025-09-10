@@ -950,7 +950,7 @@ mod tests {
         for bi in 0..b {
             for i in 0..n {
                 let mut acc = 0.0f64;
-                let start = if i + 1 >= k { i + 1 - k } else { 0 };
+                let start = (i + 1).saturating_sub(k);
                 for (t_idx, xi) in (start..=i).rev().enumerate() {
                     let tap = taps[k - 1 - t_idx];
                     acc += tap * x[[bi, xi]];
