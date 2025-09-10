@@ -457,3 +457,5 @@ jobs:
 - Added examples: `crates/scir/examples/elementwise_gpu.rs` (CPU vs CUDA elementwise ops) alongside FIR demo.
 - CONTRIBUTING updated with a concise GPU testing section and links to GPU docs.
 - Added `crates/scir/examples/fir_bench.rs` for simple CPU vs CUDA timing using `Instant` (no extra deps). Aggregated feature alias `gpu-all` added in umbrella crate.
+ 
+ - Fixed `scir-signal` doctest compile errors by removing access to private `Sos` internals in examples; updated examples to validate via `sosfilt`. Ran `cargo fmt` and verified doctests pass.

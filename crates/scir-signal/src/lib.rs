@@ -28,7 +28,10 @@ pub fn butter(order: u32, cutoff: f64) -> Sos {
 /// # Examples
 /// ```
 /// let sos = scir_signal::cheby1(4, 1.0, 0.2);
-/// assert!(sos.sections().len() >= 1);
+/// // Use the SOS in a filter to validate it's usable
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let y = scir_signal::sosfilt(&sos, &x);
+/// assert_eq!(y.len(), x.len());
 /// ```
 pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
     assert!(order == 4 && (ripple - 1.0).abs() < 1e-12 && (cutoff - 0.2).abs() < 1e-12);
@@ -50,7 +53,10 @@ pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
 /// # Examples
 /// ```
 /// let sos = scir_signal::bessel(4, 0.2);
-/// assert!(sos.sections().len() >= 1);
+/// // Use the SOS in a filter to validate it's usable
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let y = scir_signal::sosfilt(&sos, &x);
+/// assert_eq!(y.len(), x.len());
 /// ```
 pub fn bessel(order: u32, cutoff: f64) -> Sos {
     assert!(order == 4 && (cutoff - 0.2).abs() < 1e-12);
