@@ -57,6 +57,13 @@ pub struct DeviceArray<T> {
 
 impl<T: Copy> DeviceArray<T> {
     /// Create a `DeviceArray` from a CPU slice and explicit shape/dtype.
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1.0f32, 2.0, 3.0, 4.0];
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[2,2], scir_gpu::DType::F32, &data);
+    /// assert_eq!(arr.shape(), &[2,2]);
+    /// ```
     pub fn from_cpu_slice(shape: &[usize], dtype: DType, data: &[T]) -> Self {
         assert_eq!(shape.iter().product::<usize>(), data.len());
         Self {
@@ -68,21 +75,50 @@ impl<T: Copy> DeviceArray<T> {
     }
 
     /// Copy data back to a CPU-owned `Vec<T>`.
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1i32,2,3];
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[3], scir_gpu::DType::F32, &data);
+    /// let back = arr.to_cpu_vec();
+    /// assert_eq!(back, vec![1,2,3]);
+    /// ```
     pub fn to_cpu_vec(&self) -> Vec<T> {
         self.host.clone()
     }
 
     /// Return the logical shape of the array.
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![0u8; 6];
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[2,3], scir_gpu::DType::F32, &data);
+    /// assert_eq!(arr.shape(), &[2,3]);
+    /// ```
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
 
     /// Return the element data type.
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![0u8; 4];
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[4], scir_gpu::DType::F32, &data);
+    /// assert!(matches!(arr.dtype(), scir_gpu::DType::F32));
+    /// ```
     pub fn dtype(&self) -> DType {
         self.dtype
     }
 
     /// Return the current device of this array.
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1u8,2,3,4];
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[4], scir_gpu::DType::F32, &data);
+    /// assert!(matches!(arr.device(), scir_gpu::Device::Cpu));
+    /// ```
     pub fn device(&self) -> Device {
         self.device
     }
@@ -91,6 +127,14 @@ impl<T: Copy> DeviceArray<T> {
 impl<T: Copy> DeviceArray<T> {
     #[cfg(feature = "cuda")]
     /// Move the array to a device (CPU or CUDA if enabled).
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1.0f32, 2.0, 3.0, 4.0];
+    /// let mut arr = scir_gpu::DeviceArray::from_cpu_slice(&[4], scir_gpu::DType::F32, &data);
+    /// // Always available
+    /// arr.to_device(scir_gpu::Device::Cpu).unwrap();
+    /// ```
     pub fn to_device(&mut self, device: Device) -> Result<(), GpuError> {
         match device {
             Device::Cpu => {
@@ -123,6 +167,14 @@ where
     T: Copy + NumAssign,
 {
     /// Add a scalar to each element (CPU baseline).
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1.0f32, 2.0, 3.0];
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[3], scir_gpu::DType::F32, &data);
+    /// let out = arr.add_scalar(1.0f32);
+    /// assert_eq!(out.to_cpu_vec(), vec![2.0f32, 3.0, 4.0]);
+    /// ```
     pub fn add_scalar(&self, alpha: T) -> Self {
         let mut out = self.clone();
         for v in &mut out.host {
@@ -132,6 +184,14 @@ where
     }
 
     /// Multiply each element by a scalar (CPU baseline).
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1.0f32, 2.0, 3.0];
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[3], scir_gpu::DType::F32, &data);
+    /// let out = arr.mul_scalar(2.0f32);
+    /// assert_eq!(out.to_cpu_vec(), vec![2.0f32, 4.0, 6.0]);
+    /// ```
     pub fn mul_scalar(&self, alpha: T) -> Self {
         let mut out = self.clone();
         for v in &mut out.host {
@@ -146,6 +206,14 @@ where
     T: Copy + NumAssign,
 {
     /// Elementwise addition between arrays (CPU baseline).
+    ///
+    /// # Examples
+    /// ```
+    /// let a = scir_gpu::DeviceArray::from_cpu_slice(&[3], scir_gpu::DType::F32, &[1.0f32,2.0,3.0]);
+    /// let b = scir_gpu::DeviceArray::from_cpu_slice(&[3], scir_gpu::DType::F32, &[0.5f32,1.5,2.5]);
+    /// let c = a.add(&b).unwrap();
+    /// assert_eq!(c.to_cpu_vec(), vec![1.5f32, 3.5, 5.5]);
+    /// ```
     pub fn add(&self, other: &Self) -> Result<Self, GpuError> {
         if self.shape != other.shape {
             return Err(GpuError::ShapeMismatch);
@@ -159,7 +227,16 @@ where
 }
 
 impl DeviceArray<f32> {
-    /// Elementwise add-scalar, dispatching to CUDA if device == Cuda and feature enabled.
+    /// Elementwise add-scalar, with CUDA dispatch when available.
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1.0f32, 2.0, 3.0];
+    /// let mut a = scir_gpu::DeviceArray::from_cpu_slice(&[3], scir_gpu::DType::F32, &data);
+    /// a.to_device(scir_gpu::Device::Cpu).unwrap();
+    /// let out = a.add_scalar_auto(1.0);
+    /// assert_eq!(out.to_cpu_vec(), vec![2.0f32, 3.0, 4.0]);
+    /// ```
     pub fn add_scalar_auto(&self, alpha: f32) -> Self {
         #[cfg(feature = "cuda")]
         {
@@ -186,7 +263,15 @@ impl DeviceArray<f32> {
         }
     }
 
-    /// Elementwise add of two arrays, dispatching to CUDA when available.
+    /// Elementwise add of two arrays, with CUDA dispatch when available.
+    ///
+    /// # Examples
+    /// ```
+    /// let a = scir_gpu::DeviceArray::from_cpu_slice(&[2], scir_gpu::DType::F32, &[1.0f32,2.0]);
+    /// let b = scir_gpu::DeviceArray::from_cpu_slice(&[2], scir_gpu::DType::F32, &[0.5f32,1.5]);
+    /// let c = a.add_auto(&b).unwrap();
+    /// assert_eq!(c.to_cpu_vec(), vec![1.5f32, 3.5]);
+    /// ```
     pub fn add_auto(&self, other: &Self) -> Result<Self, GpuError> {
         if self.shape != other.shape {
             return Err(GpuError::ShapeMismatch);
@@ -218,6 +303,14 @@ impl DeviceArray<f32> {
     }
 
     /// Elementwise mul-scalar with device dispatch.
+    ///
+    /// # Examples
+    /// ```
+    /// let data = vec![1.0f32, 2.0, 3.0];
+    /// let a = scir_gpu::DeviceArray::from_cpu_slice(&[3], scir_gpu::DType::F32, &data);
+    /// let out = a.mul_scalar_auto(2.0);
+    /// assert_eq!(out.to_cpu_vec(), vec![2.0f32, 4.0, 6.0]);
+    /// ```
     pub fn mul_scalar_auto(&self, alpha: f32) -> Self {
         #[cfg(feature = "cuda")]
         {
@@ -246,6 +339,20 @@ impl DeviceArray<f32> {
 
 /// Dispatch FIR to CUDA if requested; otherwise use CPU baseline.
 /// FIR over each row of `x` using `taps` with device dispatch (CUDA when available).
+///
+/// This function accepts a `Device` hint and will attempt to run on
+/// CUDA when compiled with the `cuda` feature and a device is present,
+/// otherwise it falls back to the CPU baseline.
+///
+/// # Examples
+/// ```
+/// use ndarray::{array, Array1, Array2};
+/// let x: Array2<f32> = array![[1.0, 2.0, 3.0, 4.0]];
+/// let taps: Array1<f32> = array![0.25, 0.5, 0.25];
+/// // Explicitly run on CPU; returns shape-identical output
+/// let y = scir_gpu::fir1d_batched_f32_auto(&x, &taps, scir_gpu::Device::Cpu);
+/// assert_eq!(y.shape(), &[1, 4]);
+/// ```
 pub fn fir1d_batched_f32_auto(x: &Array2<f32>, taps: &Array1<f32>, device: Device) -> Array2<f32> {
     /// FIR over each row of `x` using `taps` with device dispatch (CUDA when available).
     #[cfg(feature = "cuda")]
@@ -837,6 +944,16 @@ pub use cuda::{add_scalar_f32_cuda, add_vec_f32_cuda, mul_scalar_f32_cuda};
 /// Causal FIR over each row of `x` using `taps` (CPU baseline, f32).
 ///
 /// Input shape is `(batch, n)` and the same shape is returned.
+///
+/// # Examples
+/// ```
+/// use ndarray::{array, Array1, Array2};
+/// // Two rows (batch=2), four samples each
+/// let x: Array2<f32> = array![[1.0, 2.0, 3.0, 4.0], [0.5, 0.0, -0.5, -1.0]];
+/// let taps: Array1<f32> = array![0.25, 0.5, 0.25];
+/// let y = scir_gpu::fir1d_batched_f32(&x, &taps);
+/// assert_eq!(y.shape(), &[2, 4]);
+/// ```
 pub fn fir1d_batched_f32(x: &Array2<f32>, taps: &Array1<f32>) -> Array2<f32> {
     let (b, n) = x.dim();
     let k = taps.len();
@@ -860,6 +977,15 @@ pub fn fir1d_batched_f32(x: &Array2<f32>, taps: &Array1<f32>) -> Array2<f32> {
 /// Causal FIR over each row of `x` using `taps` (CPU baseline, f64).
 ///
 /// Input shape is `(batch, n)` and the same shape is returned.
+///
+/// # Examples
+/// ```
+/// use ndarray::{array, Array1, Array2};
+/// let x: Array2<f64> = array![[1.0, 2.0, 3.0, 4.0]];
+/// let taps: Array1<f64> = array![0.25, 0.5, 0.25];
+/// let y = scir_gpu::fir1d_batched_f64(&x, &taps);
+/// assert_eq!(y.shape(), &[1, 4]);
+/// ```
 pub fn fir1d_batched_f64(x: &Array2<f64>, taps: &Array1<f64>) -> Array2<f64> {
     let (b, n) = x.dim();
     let k = taps.len();
