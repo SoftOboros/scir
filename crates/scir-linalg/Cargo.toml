@@ -37,3 +37,4 @@ optional = true
 ndarray-npy = "0.8"
 criterion = "0.5"
 proptest = "1"
+rand = "0.8"

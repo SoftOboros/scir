@@ -99,13 +99,9 @@ mod tests {
             s_mat[[i, i]] = s[i];
         }
         let a_recon = u.dot(&s_mat).dot(&vt);
-        assert_close!(
-            &a_recon.view().as_array().to_owned(),
-            &a,
-            array,
-            atol = 1e-8,
-            rtol = 1e-8
-        );
+        let a_recon_vec = a_recon.to_owned().into_raw_vec();
+        let a_vec = a.to_owned().into_raw_vec();
+        assert_close!(&a_recon_vec, &a_vec, slice, atol = 1e-8, rtol = 1e-8);
     }
 
     #[test]
@@ -119,20 +115,16 @@ mod tests {
             ReadNpyExt::read_npy(File::open(base.join("qr_A.npy")).unwrap()).unwrap();
         let (q, r) = qr(&a);
         let a_recon = q.dot(&r);
-        assert_close!(
-            &a_recon.view().as_array().to_owned(),
-            &a,
-            array,
-            atol = 1e-8,
-            rtol = 1e-8
-        );
+        let a_recon_vec = a_recon.to_owned().into_raw_vec();
+        let a_vec = a.to_owned().into_raw_vec();
+        assert_close!(&a_recon_vec, &a_vec, slice, atol = 1e-8, rtol = 1e-8);
     }
 
     // Property test: for SPD A, solve(A, b) should satisfy A x ≈ b
     #[test]
     #[cfg(feature = "blas")]
     fn solve_spd_property() {
-        let mut rng = proptest::test_runner::TestRng::deterministic();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         for _ in 0..16 {
             // 5x5 SPD matrix
             let m = 5usize;

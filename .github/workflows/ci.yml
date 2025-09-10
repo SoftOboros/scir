@@ -60,6 +60,8 @@ jobs:
         run: |
           echo "VCPKGRS_DYNAMIC=1" >> $GITHUB_ENV
           echo "VCPKG_DEFAULT_TRIPLET=x64-windows" >> $GITHUB_ENV
+          # Export VCPKG_ROOT for crates expecting this var (openblas-src)
+          echo "VCPKG_ROOT=${VCPKG_INSTALLATION_ROOT}" >> $GITHUB_ENV
       - name: Download fixtures
         uses: actions/download-artifact@v4
         with:

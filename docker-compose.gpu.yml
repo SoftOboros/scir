@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  gpu-dev:
+    build:
+      context: .
+      dockerfile: ci/docker/Dockerfile.cuda
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - cargo-registry:/opt/rust/cargo/registry
+      - cargo-git:/opt/rust/cargo/git
+      - sccache:/var/cache/sccache
+    environment:
+      # sccache local dir; enable S3 by setting SCCACHE_BUCKET/REGION/creds in env or .env file
+      - RUSTC_WRAPPER=sccache
+      - SCCACHE_DIR=/var/cache/sccache
+      - CARGO_HOME=/opt/rust/cargo
+      - RUSTUP_HOME=/opt/rust/rustup
+      # Optional S3 config (uncomment or provide via env/Secrets)
+      # - SCCACHE_BUCKET=your-bucket
+      # - SCCACHE_REGION=us-east-1
+      # - SCCACHE_S3_KEY_PREFIX=scir/linux
+      # - AWS_ACCESS_KEY_ID=...
+      # - AWS_SECRET_ACCESS_KEY=...
+    tty: true
+    stdin_open: true
+    # Request GPUs (Compose v2 schema)
+    device_requests:
+      - capabilities: ["gpu"]
+    # Alternatively (legacy):
+    # runtime: nvidia
+    # Or experimental: gpus: all
+
+volumes:
+  cargo-registry: {}
+  cargo-git: {}
+  sccache: {}
+
