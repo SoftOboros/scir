@@ -41,6 +41,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      # Improve sccache effectiveness and avoid incremental artifacts
+      CARGO_INCREMENTAL: 0
+      # Enable GHA cache backend when supported by sccache (falls back to disk otherwise)
+      SCCACHE_GHA_ENABLED: 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -112,8 +117,16 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-warm
         run: |
-          # Build a couple of small crates to populate cache
-          cargo check -p scir-core -p scir-nd -p scir-fft -q || true
+          # Build a couple of small crates to populate cache (use build to exercise codegen)
+          cargo build -p scir-core -p scir-nd -p scir-fft -q || true
+      - name: Cache sccache dir (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sccache
+          key: sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            sccache-${{ runner.os }}-
       - name: Show sccache backend
         if: always()
         shell: bash
