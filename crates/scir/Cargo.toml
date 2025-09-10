@@ -1,6 +1,6 @@
 [package]
 name = "scir"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "MIT"
 description = "SciR: SciPy rebuilt for Rust — safe, fast, GPU‑ready. Parity-first APIs for FFT, signal, optimize, and more."
@@ -10,7 +10,6 @@ documentation = "https://docs.rs/scir"
 readme = "README.md"
 keywords = ["scir","scipy","rust","gpu","ndarray"]
 categories = ["science","mathematics"]
-publish = false
 
 [features]
 default = []
@@ -20,16 +19,16 @@ gpu = ["scir-gpu/cuda", "scir-signal/gpu"]
 gpu-all = ["gpu"]
 
 [dependencies]
-scir-core = { path = "../scir-core" }
-scir-nd = { path = "../scir-nd" }
-scir-fft = { path = "../scir-fft" }
-scir-signal = { path = "../scir-signal", default-features = false, features = [] }
-scir-gpu = { path = "../scir-gpu", default-features = false, features = [] }
+scir-core = { version = "0.3.0", path = "../scir-core" }
+scir-nd = { version = "0.3.0", path = "../scir-nd" }
+scir-fft = { version = "0.3.0", path = "../scir-fft" }
+scir-signal = { version = "0.3.0", path = "../scir-signal", default-features = false, features = [] }
+scir-gpu = { version = "0.3.0", path = "../scir-gpu", default-features = false, features = [] }
 ndarray = "0.15"
 
 [lib]
 path = "src/lib.rs"
 
 [dev-dependencies]
-scir-gpu = { path = "../scir-gpu" }
+scir-gpu = { version = "0.3.0", path = "../scir-gpu" }
 rand = "0.8"
