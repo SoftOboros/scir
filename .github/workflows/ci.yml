@@ -168,7 +168,9 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-linalg-windows
         run: cargo clippy --manifest-path crates/scir-linalg/Cargo.toml -p scir-linalg --features "blas,windows-openblas" -- -D warnings
-      - name: Build + Test core crates (no BLAS)
+      - name: Build + Test core crates (no BLAS) [Unix shells]
+        if: matrix.os != 'windows-latest'
+        shell: bash
         env:
           CARGO_TARGET_DIR: target-core
         run: |
@@ -176,6 +178,21 @@ jobs:
             echo "::group::build $pkg"; cargo build -p $pkg --verbose; echo "::endgroup::"; \
             echo "::group::test  $pkg"; cargo test  -p $pkg --verbose; echo "::endgroup::"; \
           done
+      - name: Build + Test core crates (no BLAS) [Windows]
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          CARGO_TARGET_DIR: target-core
+        run: |
+          $packages = @('scir-core','scir-nd','scir-fft','scir-signal','scir-optimize')
+          foreach ($pkg in $packages) {
+            Write-Host "::group::build $pkg"
+            cargo build -p $pkg --verbose
+            Write-Host "::endgroup::"
+            Write-Host "::group::test  $pkg"
+            cargo test  -p $pkg --verbose
+            Write-Host "::endgroup::"
+          }
       - name: Build + Test scir-linalg (Linux, OpenBLAS static)
         if: matrix.os == 'ubuntu-latest'
         env:
