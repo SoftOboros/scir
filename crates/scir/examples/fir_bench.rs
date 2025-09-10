@@ -56,7 +56,7 @@ fn main() {
 
     // CPU baseline
     let t0 = Instant::now();
-    let y_cpu = scir_gpu::fir1d_batched_f32(&x, &taps);
+    let _y_cpu = scir_gpu::fir1d_batched_f32(&x, &taps);
     let dt_cpu = t0.elapsed();
     println!("CPU FIR: {:?} for {}x{} (k={})", dt_cpu, b, n, k);
 

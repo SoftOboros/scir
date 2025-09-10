@@ -8,11 +8,7 @@ pub fn assert_close_scalar(left: f64, right: f64, atol: f64, rtol: f64) {
     let tol = atol + rtol * right.abs();
     assert!(
         diff <= tol,
-        "expected |{} - {}| <= {}, got {}",
-        left,
-        right,
-        tol,
-        diff
+        "expected |{left} - {right}| <= {tol}, got {diff}"
     );
 }
 
@@ -28,14 +24,7 @@ pub fn assert_close_complex_slice(left: &[Complex64], right: &[Complex64], atol:
     for (l, r) in left.iter().zip(right.iter()) {
         let diff = (*l - *r).norm();
         let tol = atol + r.norm() * rtol;
-        assert!(
-            diff <= tol,
-            "expected |{:?} - {:?}| <= {}, got {}",
-            l,
-            r,
-            tol,
-            diff
-        );
+        assert!(diff <= tol, "expected |{l:?} - {r:?}| <= {tol}, got {diff}");
     }
 }
 
@@ -56,14 +45,7 @@ pub fn assert_close_complex_array1(
     for (l, r) in left.iter().zip(right.iter()) {
         let diff = (*l - *r).norm();
         let tol = atol + r.norm() * rtol;
-        assert!(
-            diff <= tol,
-            "expected |{:?} - {:?}| <= {}, got {}",
-            l,
-            r,
-            tol,
-            diff
-        );
+        assert!(diff <= tol, "expected |{l:?} - {r:?}| <= {tol}, got {diff}");
     }
 }
 

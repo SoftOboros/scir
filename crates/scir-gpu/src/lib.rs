@@ -27,7 +27,7 @@ pub enum GpuError {
 impl fmt::Display for GpuError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GpuError::BackendUnavailable(name) => write!(f, "backend not available: {}", name),
+            GpuError::BackendUnavailable(name) => write!(f, "backend not available: {name}"),
             GpuError::ShapeMismatch => write!(f, "shape mismatch"),
         }
     }
@@ -162,7 +162,7 @@ impl DeviceArray<f32> {
         }
         #[cfg(not(feature = "cuda"))]
         {
-            return self.mul_scalar(1.0f32).add_scalar(alpha);
+            self.mul_scalar(1.0f32).add_scalar(alpha)
         }
     }
 
@@ -193,7 +193,7 @@ impl DeviceArray<f32> {
         }
         #[cfg(not(feature = "cuda"))]
         {
-            return self.add(other);
+            self.add(other)
         }
     }
 
@@ -219,7 +219,7 @@ impl DeviceArray<f32> {
         }
         #[cfg(not(feature = "cuda"))]
         {
-            return self.mul_scalar(alpha);
+            self.mul_scalar(alpha)
         }
     }
 }
@@ -238,7 +238,8 @@ pub fn fir1d_batched_f32_auto(x: &Array2<f32>, taps: &Array1<f32>, device: Devic
     }
     #[cfg(not(feature = "cuda"))]
     {
-        return fir1d_batched_f32(x, taps);
+        let _ = device;
+        fir1d_batched_f32(x, taps)
     }
 }
 
@@ -866,7 +867,7 @@ mod tests {
         assert_eq!(arr.shape(), &[2, 2]);
         assert_eq!(arr.dtype(), DType::F32);
         assert_eq!(arr.device(), Device::Cpu);
-        assert_close!(&arr.to_cpu_vec(), &data, slice, tol = 0.0);
+        assert_eq!(arr.to_cpu_vec(), data);
     }
 
     #[cfg(feature = "cuda")]
@@ -878,7 +879,8 @@ mod tests {
         let mut out = vec![0.0f32; 4];
         match crate::add_vec_f32_cuda(&a, &b, &mut out) {
             Ok(()) => {
-                assert_close!(&out, &[1.5, 3.5, 5.5, 7.5], slice, tol = 1e-6);
+                let out_f64: Vec<f64> = out.iter().copied().map(|v| v as f64).collect();
+                assert_close!(&out_f64, &[1.5, 3.5, 5.5, 7.5], slice, tol = 1e-6);
             }
             Err(_) => {
                 eprintln!("CUDA not available; skipping CUDA test");
@@ -887,11 +889,13 @@ mod tests {
         }
         let mut out2 = vec![0.0f32; 4];
         crate::add_scalar_f32_cuda(&a, 1.0, &mut out2).unwrap();
-        assert_close!(&out2, &[2.0, 3.0, 4.0, 5.0], slice, tol = 1e-6);
+        let out2_f64: Vec<f64> = out2.iter().copied().map(|v| v as f64).collect();
+        assert_close!(&out2_f64, &[2.0, 3.0, 4.0, 5.0], slice, tol = 1e-6);
 
         let mut out3 = vec![0.0f32; 4];
         crate::mul_scalar_f32_cuda(&a, 2.0, &mut out3).unwrap();
-        assert_close!(&out3, &[2.0, 4.0, 6.0, 8.0], slice, tol = 1e-6);
+        let out3_f64: Vec<f64> = out3.iter().copied().map(|v| v as f64).collect();
+        assert_close!(&out3_f64, &[2.0, 4.0, 6.0, 8.0], slice, tol = 1e-6);
     }
 
     #[test]
@@ -909,7 +913,7 @@ mod tests {
         let a = DeviceArray::from_cpu_slice(&[3], DType::F32, &[1.0, 2.0, 3.0]);
         let b = DeviceArray::from_cpu_slice(&[3], DType::F32, &[0.5, 1.5, 2.5]);
         let c = a.add(&b).unwrap();
-        assert_close!(&c.to_cpu_vec(), &[1.5, 3.5, 5.5], slice, tol = 0.0);
+        assert_eq!(c.to_cpu_vec(), vec![1.5f32, 3.5, 5.5]);
     }
 
     #[test]
@@ -917,23 +921,13 @@ mod tests {
         let x: Array2<f32> = array![[1.0, 2.0, 3.0, 4.0], [0.5, 0.0, -0.5, -1.0]];
         let taps: Array1<f32> = array![0.25, 0.5, 0.25];
         let y = fir1d_batched_f32(&x, &taps);
-        // Manually compute expected for first row
-        let expected0 = array![0.25, 1.0, 2.0, 3.0];
-        let expected1 = array![0.125, 0.25, -0.25, -0.5];
-        assert_close!(
-            &y.index_axis(Axis(0), 0).to_owned(),
-            &expected0,
-            array,
-            atol = 1e-7,
-            rtol = 1e-7
-        );
-        assert_close!(
-            &y.index_axis(Axis(0), 1).to_owned(),
-            &expected1,
-            array,
-            atol = 1e-7,
-            rtol = 1e-7
-        );
+        // Manually compute expected for first row (compare as f64)
+        let expected0_f64 = array![0.25f64, 1.0, 2.0, 3.0];
+        let expected1_f64 = array![0.125f64, 0.25, 0.0, -0.5];
+        let y0_f64 = y.index_axis(Axis(0), 0).to_owned().mapv(|v| v as f64);
+        let y1_f64 = y.index_axis(Axis(0), 1).to_owned().mapv(|v| v as f64);
+        assert_close!(&y0_f64, &expected0_f64, array, atol = 1e-7, rtol = 1e-7);
+        assert_close!(&y1_f64, &expected1_f64, array, atol = 1e-7, rtol = 1e-7);
     }
 
     #[test]
@@ -983,13 +977,14 @@ mod tests {
         match crate::fir1d_batched_f32_cuda(&x, &taps) {
             Ok(y_cuda) => {
                 let y_cpu = super::fir1d_batched_f32(&x, &taps);
-                assert_close!(
-                    &y_cuda.into_raw_vec(),
-                    &y_cpu.into_raw_vec(),
-                    slice,
-                    atol = 1e-5,
-                    rtol = 1e-6
-                );
+                let y_cuda_f64: Vec<f64> = y_cuda
+                    .into_raw_vec()
+                    .into_iter()
+                    .map(|v| v as f64)
+                    .collect();
+                let y_cpu_f64: Vec<f64> =
+                    y_cpu.into_raw_vec().into_iter().map(|v| v as f64).collect();
+                assert_close!(&y_cuda_f64, &y_cpu_f64, slice, atol = 1e-5, rtol = 1e-6);
             }
             Err(_) => {
                 eprintln!("CUDA not available; skipping CUDA FIR test");

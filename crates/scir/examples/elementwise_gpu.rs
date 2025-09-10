@@ -1,4 +1,6 @@
-use scir_gpu::{DType, Device, DeviceArray};
+#[cfg(feature = "gpu")]
+use scir_gpu::Device;
+use scir_gpu::{DType, DeviceArray};
 use std::env;
 
 fn parse_arg_usize(args: &[String], key: &str, default: usize) -> usize {
@@ -31,7 +33,10 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let n = parse_arg_usize(&args, "--n", 8);
     let add_alpha = parse_arg_f32(&args, "--add_alpha", 1.0);
+    #[cfg(feature = "gpu")]
     let mul_alpha = parse_arg_f32(&args, "--mul_alpha", 2.0);
+    #[cfg(not(feature = "gpu"))]
+    let _mul_alpha = parse_arg_f32(&args, "--mul_alpha", 2.0);
 
     let data = (0..n).map(|i| i as f32).collect::<Vec<_>>();
     let arr = DeviceArray::from_cpu_slice(&[n], DType::F32, &data);
