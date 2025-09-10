@@ -11,8 +11,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Ensure sccache (Linux)
+        shell: bash
+        run: |
+          if ! command -v sccache >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update && sudo apt-get install -y sccache || true
+            fi
+          fi
+      - name: Setup sccache env
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          if [ -n "${{ secrets.SCCACHE_BUCKET }}" ]; then echo "SCCACHE_BUCKET=${{ secrets.SCCACHE_BUCKET }}" >> $GITHUB_ENV; fi
+          if [ -n "${{ secrets.SCCACHE_REGION }}" ]; then echo "SCCACHE_REGION=${{ secrets.SCCACHE_REGION }}" >> $GITHUB_ENV; fi
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          echo "SCCACHE_S3_KEY_PREFIX=/scir/${TRIPLE}" >> $GITHUB_ENV
+      - name: Start sccache server
+        run: sccache --start-server || true
+      - name: Warm sccache (quick check)
+        env:
+          CARGO_TARGET_DIR: target-warm
+        run: cargo check -p scir-gpu -q || true
       - run: nvidia-smi
       - name: Build CPU-backed GPU crate
         run: cargo build -p scir-gpu --verbose
       - name: Test CUDA feature
         run: cargo test -p scir-gpu --features cuda -- --nocapture
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true

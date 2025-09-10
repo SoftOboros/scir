@@ -52,9 +52,10 @@ pub fn qr(_a: &Array2<f64>) -> (Array2<f64>, Array2<f64>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{array, Array1, Array2};
+    use ndarray::{Array1, Array2};
     use ndarray_npy::ReadNpyExt;
     use proptest::prelude::*;
+    use rand::SeedableRng;
     use scir_core::assert_close;
     use std::{fs::File, path::PathBuf};
 

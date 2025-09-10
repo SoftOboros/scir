@@ -9,7 +9,7 @@ Environment
 - sccache is installed and enabled via `RUSTC_WRAPPER=sccache`.
 - Local cache volume is mounted at `/var/cache/sccache`.
 - To use S3, export env vars before `docker compose`:
-  - SCCACHE_BUCKET, SCCACHE_REGION, optional SCCACHE_S3_KEY_PREFIX
+  - SCCACHE_BUCKET, SCCACHE_REGION, optional SCCACHE_S3_KEY_PREFIX (no trailing slash; e.g., `/scir/x86_64-unknown-linux-gnu`)
   - AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (or role/IMDS in EC2)
 
 GPUs
@@ -26,4 +26,3 @@ Examples
   - cargo test -p scir-core
 - CUDA tests (if GPU available):
   - cargo test -p scir-gpu --features cuda
-
