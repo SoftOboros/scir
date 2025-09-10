@@ -8,10 +8,18 @@ jobs:
     # Avoid running on forks; ensure Linux self-hosted + NVIDIA GPU
     if: github.event.pull_request.head.repo.fork == false && runner.os == 'Linux'
     runs-on: [self-hosted, linux, x64, gpu, nvidia]
+    env:
+      ENABLE_GPU_CI: ${{ secrets.ENABLE_GPU_CI }}
     steps:
+      - name: GPU CI disabled (no-op)
+        if: ${{ env.ENABLE_GPU_CI == '' }}
+        run: echo "GPU CI is disabled (set ENABLE_GPU_CI secret to enable). Skipping."
       - uses: actions/checkout@v4
+        if: ${{ env.ENABLE_GPU_CI != '' }}
       - uses: dtolnay/rust-toolchain@stable
+        if: ${{ env.ENABLE_GPU_CI != '' }}
       - name: Ensure sccache (Linux)
+        if: ${{ env.ENABLE_GPU_CI != '' }}
         shell: bash
         run: |
           if ! command -v sccache >/dev/null 2>&1; then
@@ -20,6 +28,7 @@ jobs:
             fi
           fi
       - name: Setup sccache env
+        if: ${{ env.ENABLE_GPU_CI != '' }}
         shell: bash
         run: |
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
@@ -38,15 +47,20 @@ jobs:
             mkdir -p "$RUNNER_TEMP/sccache"
           fi
       - name: Start sccache server
+        if: ${{ env.ENABLE_GPU_CI != '' }}
         run: sccache --start-server || true
       - name: Warm sccache (quick check)
+        if: ${{ env.ENABLE_GPU_CI != '' }}
         env:
           CARGO_TARGET_DIR: target-warm
         run: cargo check -p scir-gpu -q || true
       - run: nvidia-smi
+        if: ${{ env.ENABLE_GPU_CI != '' }}
       - name: Build CPU-backed GPU crate
+        if: ${{ env.ENABLE_GPU_CI != '' }}
         run: cargo build -p scir-gpu --verbose
       - name: Test CUDA feature
+        if: ${{ env.ENABLE_GPU_CI != '' }}
         run: cargo test -p scir-gpu --features cuda -- --nocapture
       - name: sccache stats
         if: always()
