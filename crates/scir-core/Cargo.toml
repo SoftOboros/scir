@@ -1,6 +1,6 @@
 [package]
 name = "scir-core"
-version = "0.3.0"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 description = "SciR core utilities: numeric tolerances, complex helpers, and shared test macros for the SciR ecosystem (SciPy rebuilt for Rust)."

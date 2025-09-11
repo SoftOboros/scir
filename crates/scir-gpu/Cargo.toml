@@ -1,6 +1,6 @@
 [package]
 name = "scir-gpu"
-version = "0.3.0"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 description = "SciR GPU foundations: device arrays and CUDA (feature-gated) elementwise/FIR kernels with CPU parity."

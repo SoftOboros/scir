@@ -1,6 +1,6 @@
 [package]
 name = "scir-fft"
-version = "0.3.0"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 description = "SciR FFT: parity-first FFT/RFFT/IRFFT with fixture-based testing and rustfft/realfft backends."

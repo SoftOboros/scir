@@ -1,6 +1,6 @@
 [package]
 name = "scir-nd"
-version = "0.3.0"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 description = "ndarray interop for SciR: clean shape/stride conversions and helpers so compute crates focus on math."

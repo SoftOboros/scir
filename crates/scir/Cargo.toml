@@ -1,6 +1,6 @@
 [package]
 name = "scir"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 description = "SciR: SciPy rebuilt for Rust — safe, fast, GPU‑ready. Parity-first APIs for FFT, signal, optimize, and more."
