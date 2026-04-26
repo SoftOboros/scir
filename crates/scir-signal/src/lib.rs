@@ -4,13 +4,41 @@
 use ndarray::Array1;
 use scir_iir_filters::{
     filter::{DirectForm2Transposed, Filter},
-    filter_design::{butter as design_butter, FilterType},
+    filter_design::{butter as design_butter, cheby1 as design_cheby1},
     sos::zpk2sos,
 };
 
+pub use scir_iir_filters::errors::Error as FilterError;
+pub use scir_iir_filters::filter_design::FilterType;
 pub use scir_iir_filters::sos::{Sos, SosCoeffs};
 
-/// Design a Butterworth low-pass filter and return SOS.
+/// Design a Butterworth filter across all four [`FilterType`] variants
+/// and return SOS form. Mirrors `scipy.signal.butter(N, Wn, btype, fs=fs,
+/// output='sos')`.
+///
+/// # Examples
+/// ```
+/// use scir_signal::FilterType;
+/// // Equivalent to scipy.signal.butter(4, 200, btype='highpass', fs=1000, output='sos')
+/// let sos = scir_signal::butter_filter(4, FilterType::HighPass(200.0), 1000.0).unwrap();
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let _y = scir_signal::sosfilt(&sos, &x);
+/// ```
+pub fn butter_filter(
+    order: u32,
+    filter_type: FilterType,
+    fs: f64,
+) -> Result<Sos, FilterError> {
+    let zpk = design_butter(order, filter_type, fs)?;
+    zpk2sos(&zpk, None)
+}
+
+/// Design a Butterworth **low-pass** filter on the SciPy normalized-frequency
+/// convention (`fs=2`, so `cutoff` ∈ (0, 1)) and return SOS.
+///
+/// Thin wrapper over [`butter_filter`] preserved for backward compatibility.
+/// New code wanting HPF/BPF/BSF or an explicit sample rate SHOULD call
+/// [`butter_filter`] directly.
 ///
 /// # Examples
 /// ```
@@ -19,36 +47,55 @@ pub use scir_iir_filters::sos::{Sos, SosCoeffs};
 /// let _y = scir_signal::sosfilt(&sos, &x);
 /// ```
 pub fn butter(order: u32, cutoff: f64) -> Sos {
-    let zpk = design_butter(order, FilterType::LowPass(cutoff), 2.0).unwrap();
-    zpk2sos(&zpk, None).unwrap()
+    butter_filter(order, FilterType::LowPass(cutoff), 2.0)
+        .expect("butter design failed for valid LowPass parameters")
 }
 
-/// Return a Chebyshev Type I low-pass filter (order=4, ripple=1, cutoff=0.2).
+/// Design a Chebyshev Type I filter across all four [`FilterType`] variants
+/// and return SOS form. `rp` is the maximum passband ripple in dB. Mirrors
+/// `scipy.signal.cheby1(N, rp, Wn, btype, fs=fs, output='sos')`.
+///
+/// # Examples
+/// ```
+/// use scir_signal::FilterType;
+/// let sos = scir_signal::cheby1_filter(4, 1.0, FilterType::LowPass(0.2), 2.0).unwrap();
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let _y = scir_signal::sosfilt(&sos, &x);
+/// ```
+pub fn cheby1_filter(
+    order: u32,
+    ripple: f64,
+    filter_type: FilterType,
+    fs: f64,
+) -> Result<Sos, FilterError> {
+    let zpk = design_cheby1(order, ripple, filter_type, fs)?;
+    zpk2sos(&zpk, None)
+}
+
+/// Design a Chebyshev Type I **low-pass** filter on the SciPy normalized-
+/// frequency convention (`fs=2`).
+///
+/// Thin wrapper over [`cheby1_filter`] preserved for backward compatibility.
 ///
 /// # Examples
 /// ```
 /// let sos = scir_signal::cheby1(4, 1.0, 0.2);
-/// // Use the SOS in a filter to validate it's usable
 /// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
 /// let y = scir_signal::sosfilt(&sos, &x);
 /// assert_eq!(y.len(), x.len());
 /// ```
 pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
-    assert!(order == 4 && (ripple - 1.0).abs() < 1e-12 && (cutoff - 0.2).abs() < 1e-12);
-    Sos::from_vec(vec![
-        [
-            1.83555037e-03,
-            3.67110074e-03,
-            1.83555037e-03,
-            1.0,
-            -1.55478518e+00,
-            6.49295438e-01,
-        ],
-        [1.0, 2.0, 1.0, 1.0, -1.49955450e+00, 8.48218682e-01],
-    ])
+    cheby1_filter(order, ripple, FilterType::LowPass(cutoff), 2.0)
+        .expect("cheby1 design failed for valid LowPass parameters")
 }
 
 /// Return a Bessel low-pass filter (order=4, cutoff=0.2).
+///
+/// **Stub.** Bessel poles are roots of reverse Bessel polynomials and have
+/// no closed form; a full Bessel design needs tabulated roots or a
+/// polynomial root finder. Tracked as scir-issue #04 (besselap). For now
+/// this returns the SciPy-precomputed coefficients only when called with
+/// the historical fixture parameters (order=4, cutoff=0.2).
 ///
 /// # Examples
 /// ```
@@ -289,6 +336,42 @@ mod tests {
         let expected: Array1<f64> =
             ReadNpyExt::read_npy(File::open(base.join("bessel_output.npy")).unwrap()).unwrap();
         let sos = bessel(4, 0.2);
+        let result = sosfilt(&sos, &input);
+        assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
+    }
+
+    #[test]
+    fn butter_highpass_design_matches_fixture() {
+        let Some(base) = fixtures_base() else {
+            eprintln!(
+                "[scir-signal] fixtures missing; skipping butter_highpass_design_matches_fixture"
+            );
+            return;
+        };
+        let input: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("sosfilt_input.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("butter_hp_output.npy")).unwrap()).unwrap();
+        let sos =
+            butter_filter(4, FilterType::HighPass(0.3), 2.0).expect("butter_filter HPF failed");
+        let result = sosfilt(&sos, &input);
+        assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
+    }
+
+    #[test]
+    fn cheby1_highpass_design_matches_fixture() {
+        let Some(base) = fixtures_base() else {
+            eprintln!(
+                "[scir-signal] fixtures missing; skipping cheby1_highpass_design_matches_fixture"
+            );
+            return;
+        };
+        let input: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("sosfilt_input.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("cheby_hp_output.npy")).unwrap()).unwrap();
+        let sos = cheby1_filter(4, 1.0, FilterType::HighPass(0.3), 2.0)
+            .expect("cheby1_filter HPF failed");
         let result = sosfilt(&sos, &input);
         assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
     }

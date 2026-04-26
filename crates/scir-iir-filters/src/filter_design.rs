@@ -1,6 +1,9 @@
 //! Functions for designing iir filters.
 //!
-//! Only Butterworth filters are supoorted at the moment.
+//! Currently supports Butterworth ([`butter`]) and Chebyshev Type I
+//! ([`cheby1`]) prototypes through the same lp2*_zpk + bilinear pipeline
+//! across all four [`FilterType`] variants. Bessel and Chebyshev II are
+//! tracked as future work — see the SciR signal-processing roadmap.
 
 use crate::cplx;
 use crate::errors::Error;
@@ -29,6 +32,8 @@ pub enum FilterType {
 #[allow(missing_docs)]
 enum FilterAlgorithm {
     Butterworth,
+    /// Chebyshev Type I; carries passband ripple in dB.
+    Chebyshev1(f64),
 }
 
 /// Filter parameters in Zero, Pole, Gain format.
@@ -76,6 +81,33 @@ pub fn butter(N: u32, filter_type: FilterType, fs: f64) -> Result<ZPKCoeffs, Err
 
 fn butter_internal(N: u32, filter_type: FilterType, fs: Option<f64>) -> Result<ZPKCoeffs, Error> {
     iirfilter(N, filter_type, FilterAlgorithm::Butterworth, fs)
+}
+
+/// Designs an Nth-order Chebyshev Type I filter.
+///
+/// `rp` is the maximum passband ripple in dB (matches `scipy.signal.cheby1`).
+///
+/// # Example
+///```rust
+/// use scir_iir_filters::filter_design::cheby1;
+/// use scir_iir_filters::filter_design::FilterType;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let zpk = cheby1(4, 1.0, FilterType::LowPass(0.2), 2.0)?;
+///     return Ok( () );
+///  }
+/// ```
+pub fn cheby1(N: u32, rp: f64, filter_type: FilterType, fs: f64) -> Result<ZPKCoeffs, Error> {
+    iirfilter(N, filter_type, FilterAlgorithm::Chebyshev1(rp), Some(fs))
+}
+
+fn cheby1_internal(
+    N: u32,
+    rp: f64,
+    filter_type: FilterType,
+    fs: Option<f64>,
+) -> Result<ZPKCoeffs, Error> {
+    iirfilter(N, filter_type, FilterAlgorithm::Chebyshev1(rp), fs)
 }
 
 /// Designs an Nth-order digital filter. Only butterworth filters are supported at the moment.
@@ -146,6 +178,7 @@ fn iirfilter(
 
     let zpk = match algorithm {
         FilterAlgorithm::Butterworth => butterap(N)?,
+        FilterAlgorithm::Chebyshev1(rp) => cheb1ap(N, rp)?,
     };
 
     let zpk = match filter_type {
@@ -186,6 +219,58 @@ fn iirfilter(
     let zpk = bilinear_zpk(&zpk, fs)?;
 
     Ok(zpk)
+}
+
+/// Return [ZPKCoeffs] for analog prototype of Nth-order Chebyshev Type I filter.
+///
+/// `rp` is the maximum passband ripple in dB. The prototype has cutoff at
+/// w = 1 rad/s (the passband edge). Mirrors `scipy.signal.cheb1ap`.
+fn cheb1ap(N: u32, rp: f64) -> Result<ZPKCoeffs, Error> {
+    if rp <= 0.0 {
+        return Err(IllegalArgument(
+            "Passband ripple `rp` (dB) must be > 0.".to_string(),
+        ));
+    }
+    if N == 0 {
+        // Degenerate case: scalar gain only (passband is a single attenuated point).
+        return Ok(ZPKCoeffs {
+            z: vec![],
+            p: vec![],
+            k: 10.0_f64.powf(-rp / 20.0),
+        });
+    }
+    let n_f = N as f64;
+    let eps = (10.0_f64.powf(0.1 * rp) - 1.0).sqrt();
+    let mu = (1.0 / eps).asinh() / n_f;
+
+    // Pole angles: theta_k = pi * m / (2N) for m in {-N+1, -N+3, ..., N-1}
+    let n_i = N as i32;
+    let mut poles: Vec<Complex64> = Vec::with_capacity(N as usize);
+    let mut m = -n_i + 1;
+    while m <= n_i - 1 {
+        let theta = PI * (m as f64) / (2.0 * n_f);
+        // -sinh(mu + j*theta) expanded using sinh(a+jb) = sinh(a)cos(b) + j cosh(a) sin(b)
+        let re = -mu.sinh() * theta.cos();
+        let im = -mu.cosh() * theta.sin();
+        poles.push(Complex64::new(re, im));
+        m += 2;
+    }
+
+    // k = real(prod(-p))
+    let mut k_c = Complex64::one();
+    for p in &poles {
+        k_c *= -p;
+    }
+    let mut k = k_c.re;
+    if N % 2 == 0 {
+        k /= (1.0 + eps * eps).sqrt();
+    }
+
+    Ok(ZPKCoeffs {
+        z: vec![],
+        p: poles,
+        k,
+    })
 }
 
 /// Return [ZPKCoeffs] for analog prototype of Nth-order Butterworth filter.
@@ -429,9 +514,10 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
+    use crate::assert_approx_eq;
     use crate::cplx;
     use crate::filter_design::butterap;
-    use crate::filter_design::FilterType::{BandStop, HighPass};
+    use crate::filter_design::FilterType::{BandStop, HighPass, LowPass};
     use crate::util::Keys;
     use crate::vec_cplx;
     use num_complex::Complex;
@@ -455,6 +541,65 @@ mod tests {
         let zpk_out = butterap(5).expect("butterap failed.");
 
         zpk_out.assert_approx_equal_to(&zpk_expected, 1E-12);
+    }
+
+    #[test]
+    fn test_cheb1ap_n0_returns_scalar_gain() {
+        let zpk = cheb1ap(0, 1.0).expect("cheb1ap failed");
+        assert!(zpk.z.is_empty());
+        assert!(zpk.p.is_empty());
+        // 10^(-1.0/20) ≈ 0.891250938...
+        let expected = 10.0_f64.powf(-1.0 / 20.0);
+        assert!((zpk.k - expected).abs() < 1E-12, "k={}, expected={}", zpk.k, expected);
+    }
+
+    #[test]
+    fn test_cheb1ap_n1_single_real_pole() {
+        // For N=1: pole = -1/eps where eps = sqrt(10^(rp/10) - 1).
+        // rp=1.0 → eps ≈ 0.508847..., pole ≈ -1.96522...
+        let zpk = cheb1ap(1, 1.0).expect("cheb1ap failed");
+        assert_eq!(zpk.p.len(), 1);
+        assert!(zpk.z.is_empty());
+        let eps = (10.0_f64.powf(0.1) - 1.0).sqrt();
+        let expected_pole = Complex::<f64>::new(-1.0 / eps, 0.0);
+        assert_approx_eq!(zpk.p[0], expected_pole, 1E-12, "single pole mismatch");
+        // For odd N gain is real(prod(-p)) without the sqrt(1+eps^2) divisor.
+        let expected_k = 1.0 / eps;
+        assert_approx_eq!(zpk.k, expected_k, 1E-12, "k mismatch");
+    }
+
+    #[test]
+    fn test_cheb1ap_n4_pole_invariants() {
+        let zpk = cheb1ap(4, 1.0).expect("cheb1ap failed");
+        assert_eq!(zpk.p.len(), 4);
+        assert!(zpk.z.is_empty());
+        // All poles in left half plane.
+        for p in &zpk.p {
+            assert!(p.re < 0.0, "pole {:?} not in LHP", p);
+        }
+        // Conjugate pairs: imaginary parts come as ±x pairs (sum to 0).
+        let im_sum: f64 = zpk.p.iter().map(|p| p.im).sum();
+        assert!(im_sum.abs() < 1E-12, "imaginary parts not conjugate-symmetric: sum={}", im_sum);
+    }
+
+    #[test]
+    fn test_cheby1_lowpass_designs_without_error() {
+        // Smoke test: cheby1 should run end-to-end through the iirfilter pipeline.
+        let zpk = super::cheby1(4, 1.0, LowPass(0.2), 2.0).expect("cheby1 failed");
+        assert_eq!(zpk.p.len(), 4);
+        // All poles inside the unit circle (digital stability).
+        for p in &zpk.p {
+            assert!(p.norm() < 1.0, "pole {:?} outside unit circle", p);
+        }
+    }
+
+    #[test]
+    fn test_cheby1_highpass_designs_without_error() {
+        let zpk = super::cheby1(4, 1.0, HighPass(0.2), 2.0).expect("cheby1 failed");
+        assert_eq!(zpk.p.len(), 4);
+        for p in &zpk.p {
+            assert!(p.norm() < 1.0, "pole {:?} outside unit circle", p);
+        }
     }
 
     #[test]

@@ -44,8 +44,11 @@
 //! # Notes
 //!
 //! See: [scipy.signal: butter()](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.butter.html)
+//!      and [scipy.signal: cheby1()](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.cheby1.html)
 //!
-//! ⚠️ For now it only implements Butterworth filters, because that's all I'm interested in.
+//! Currently implements Butterworth and Chebyshev Type I across all four
+//! [`filter_design::FilterType`] variants. Bessel and Chebyshev II are
+//! tracked as follow-on work in the SciR signal-processing roadmap.
 //!
 
 #![cfg_attr(nightly, feature(doc_auto_cfg))]

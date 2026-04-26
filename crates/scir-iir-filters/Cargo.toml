@@ -1,11 +1,11 @@
 [package]
 name = "scir-iir-filters"
-version = "0.1.4"
+version = "0.1.5"
 authors = [
     "https://github.com/annoybot",
     "Softoboros Technology Inc.",
 ]
-description = "SciR fork of iir_filters: Apache-2.0 IIR filter design (Butterworth, ZPK, SOS) with public Sos accessors so downstream realtime DSP runtimes can read designed coefficients. Tracks upstream iir_filters@0.1.3."
+description = "SciR fork of iir_filters: Apache-2.0 IIR filter design (Butterworth + Chebyshev I, ZPK, SOS) with public Sos accessors so downstream realtime DSP runtimes can read designed coefficients. Tracks upstream iir_filters@0.1.3 with SciR-side additions."
 license = "Apache-2.0"
 repository = "https://github.com/SoftOboros/scir"
 edition = "2021"
