@@ -2,6 +2,9 @@
 //!
 //! Adapted from crate [biquad](https://crates.io/crates/biquad).
 
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::sos::Sos;
 
 /// Internal states and coefficients of the Direct Form 1 form.

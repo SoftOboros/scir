@@ -52,6 +52,7 @@
 //!
 
 #![cfg_attr(nightly, feature(doc_auto_cfg))]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 #![allow(clippy::needless_return)]
@@ -62,6 +63,8 @@
 #![deny(clippy::unwrap_used)]
 #![warn(missing_docs)]
 
+extern crate alloc;
+
 pub mod errors;
 pub mod filter_design;
 
@@ -71,6 +74,10 @@ pub mod macros;
 mod cplxreal;
 pub mod filter;
 pub mod sos;
+// Reads npy/text fixture files from disk; only meaningful in std mode and
+// only used by `#[cfg(test)]` consumers. Gate the module entirely so the
+// crate compiles for `no_std + alloc` targets.
+#[cfg(feature = "std")]
 mod test_util;
 mod util;
 mod zpk2tf;

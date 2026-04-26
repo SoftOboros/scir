@@ -5,14 +5,25 @@
 //! across all four [`FilterType`] variants. Bessel and Chebyshev II are
 //! tracked as future work — see the SciR signal-processing roadmap.
 
+use alloc::format;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::f64::consts::PI;
+use core::ops::Range;
+
 use crate::cplx;
 use crate::errors::Error;
 use crate::errors::Error::{IllegalArgument, InternalError};
 use crate::filter_design::FilterType::BandPass;
 use num_complex::{Complex, Complex64};
 use num_traits::{One, Pow, Zero};
-use std::f64::consts::PI;
-use std::ops::Range;
+// In no_std mode the inherent transcendental methods on `f64` (sinh/cosh/
+// asinh/sqrt/powf/tan/sin/cos/abs) don't exist; they come from
+// `num_traits::Float` (libm-backed). In std mode the inherent methods
+// win, so the trait import is unused — hence the cfg.
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// Represents the type of filter to design, low pass, high pass etc.

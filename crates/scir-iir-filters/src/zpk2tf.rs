@@ -1,3 +1,6 @@
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::errors::Error;
 use crate::util::Keys::{Im, Re};
 use crate::util::{poly, sort_lex};

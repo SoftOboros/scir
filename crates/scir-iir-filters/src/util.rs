@@ -1,12 +1,16 @@
 // Sorting complex numbers and supporting code
 
+use alloc::format;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::cplx;
 use crate::errors::Error;
 use crate::errors::Error::IllegalArgument;
 use num_complex::Complex;
 use num_traits::Float;
 use num_traits::{One, Zero};
-use std::collections::HashSet;
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum Keys {
@@ -43,12 +47,10 @@ where
         ));
     }
 
-    {
-        let keySet: HashSet<Keys> = keys.iter().copied().collect();
-
-        if keys.len() != keySet.len() {
-            return Err(IllegalArgument("Keys must not repeat..".to_string()));
-        }
+    // No HashSet here — `keys` is bounded to ≤ 2 elements (the validation
+    // above) and a linear pass keeps us no_std + alloc-friendly.
+    if keys.len() == 2 && keys[0] == keys[1] {
+        return Err(IllegalArgument("Keys must not repeat..".to_string()));
     }
 
     // Validate that all the elements in list are normal.

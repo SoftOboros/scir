@@ -1,8 +1,12 @@
 //! Second order sections.
+use alloc::collections::BTreeMap;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cmp::max;
+
 use num_complex::Complex;
 use num_traits::Zero;
-use std::cmp::max;
-use std::collections::HashMap;
 
 use crate::cplxreal::cplxreal;
 use crate::errors::Error;
@@ -27,7 +31,7 @@ pub enum SosPairing {
 }
 
 type FnConsumeCplx = fn(
-    &mut HashMap<usize, Complex<f64>>,
+    &mut BTreeMap<usize, Complex<f64>>,
     pred: &dyn Fn(Complex<f64>) -> bool,
 ) -> Result<Complex<f64>, Error>;
 
@@ -214,16 +218,16 @@ pub fn zpk2sos(zpk: &ZPKCoeffs, pairing: Option<SosPairing>) -> Result<Sos, Erro
     let consume_worst: FnConsumeCplx = find_and_remove_closest_to_unit_circle;
 
     // Convert vecs of poles and zeroes to HasMaps to make it easier to remove items.
-    let mut p: HashMap<usize, Complex<f64>> = p
+    let mut p: BTreeMap<usize, Complex<f64>> = p
         .iter()
         .enumerate()
         .map(|(i, c)| (i, *c))
-        .collect::<HashMap<_, _>>();
-    let mut z: HashMap<usize, Complex<f64>> = z
+        .collect::<BTreeMap<_, _>>();
+    let mut z: BTreeMap<usize, Complex<f64>> = z
         .iter()
         .enumerate()
         .map(|(i, c)| (i, *c))
-        .collect::<HashMap<_, _>>();
+        .collect::<BTreeMap<_, _>>();
 
     //Construct the system, reversing order so the "worst" are last
     let mut sos = vec![vec![Complex::<f64>::zero(); 6]; n_sections];
@@ -366,7 +370,7 @@ fn single_zpksos(
 }
 
 fn find_and_remove_closest_to_unit_circle(
-    roots: &mut HashMap<usize, Complex<f64>>,
+    roots: &mut BTreeMap<usize, Complex<f64>>,
     pred: &dyn Fn(Complex<f64>) -> bool,
 ) -> Result<Complex<f64>, Error> {
     if roots.is_empty() {
@@ -401,7 +405,7 @@ enum NumberType {
 }
 
 fn find_and_remove_closest(
-    roots: &mut HashMap<usize, Complex<f64>>,
+    roots: &mut BTreeMap<usize, Complex<f64>>,
     kind: NumberType,
     to: &Complex<f64>,
 ) -> Result<Complex<f64>, Error> {

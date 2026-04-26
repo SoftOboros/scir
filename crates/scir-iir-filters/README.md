@@ -18,9 +18,21 @@ This crate is **not** intended to converge with upstream and disappear. Even if 
 
 When upstream lands compatible improvements, the fork **rebases or cherry-picks** them in — but maintains the SciR-side delta as a permanent superset.
 
+## Cargo features
+
+| Feature | Default | What it does |
+|---|---|---|
+| `std` | yes | Pulls `thiserror` for the `Error` derive and adds the standard `impl std::error::Error for Error`. Inherent `f64` transcendentals come from `std`. |
+| (none) | — | `--no-default-features` builds for `no_std + alloc` targets (e.g. `thumbv7em-none-eabihf`, `riscv32imac-unknown-none-elf`). `Display` is hand-written; `f64`/`Complex<f64>` transcendentals route through `num-complex`'s `libm` feature. All public API surface (design, ZPK→SOS, biquad filter loop) is identical across both modes. |
+
+The `no_std + alloc` mode is the wire-up point for SciR's static-overlay / build-time coefficient baking story — it lets `scir-signal-build`-generated tables be consumed (or re-derived) on embedded targets without dragging in `std`.
+
 ## Versioning
 
-Tracks upstream `iir_filters@0.1.x` lineage but versions independently under SciR's release cadence. Initial fork release: `0.1.4` shipped with SciR `v0.3.3`.
+Tracks upstream `iir_filters@0.1.x` lineage but versions independently under SciR's release cadence. Releases:
+- `0.1.4` shipped with SciR `v0.3.3` (initial fork — public Sos accessors).
+- `0.1.5` shipped with SciR `v0.3.4` (added `cheb1ap` + `cheby1` design path, all four FilterTypes for both prototypes).
+- `0.1.6` shipped with SciR `v0.3.4` (added `no_std + alloc` support via the `std` default-feature; `FilterType` derives `Clone, Copy`).
 
 ## License
 
