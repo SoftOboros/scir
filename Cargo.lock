@@ -1108,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "scir"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "ndarray",
  "rand",
@@ -1180,7 +1180,7 @@ dependencies = [
 
 [[package]]
 name = "scir-signal"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "criterion",
  "ndarray",

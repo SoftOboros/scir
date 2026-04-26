@@ -1,19 +1,27 @@
 # scir-iir-filters
 
-A SciR-maintained fork of [`iir_filters`](https://github.com/annoybot/iir_filters) (Apache-2.0).
+A SciR-maintained Apache-2.0 fork of [`iir_filters`](https://github.com/annoybot/iir_filters), permanently maintained as a **superset** of upstream so SciPy parity remains an explicit goal.
 
 ## Why a fork
 
 Upstream `iir_filters@0.1.3` keeps `Sos.sections` and every `SosCoeffs` field `pub(crate)`. Downstream consumers — including `scir-signal`, which `pub use`s `Sos` — can pass a designed `Sos` to `sosfilt` / `filtfilt` but cannot inspect the coefficients. That blocks any realtime DSP runtime that needs to bring its own filter loop (e.g. f32, allocation-free, per-channel-stateful, checkpointable).
 
-This fork is a minimal change: the design code is unchanged; we widen the visibility of `Sos.sections` and `SosCoeffs`'s coefficient fields to `pub` and add an `Sos::sections()` borrow accessor. That is sufficient for `scir-signal` to expose designed coefficients to downstream users without giving up SciPy parity.
+The initial fork pass is a minimal divergence: the design code is unchanged; we widen the visibility of `Sos.sections` and `SosCoeffs`'s coefficient fields to `pub` and add `Sos::sections()` and `Sos::to_arrays()` accessors. Future passes will keep adding accessors, design surface, and SciPy-parity coverage as the SciR ecosystem needs them — see SciR's signal-processing roadmap for what lands next.
 
-If upstream merges equivalent accessors, this crate becomes a thin re-export.
+## Maintenance posture
+
+This crate is **not** intended to converge with upstream and disappear. Even if `annoybot/iir_filters` accepts equivalent accessors, scir-iir-filters remains the SciR-controlled implementation:
+
+- SciR's SciPy-parity contract requires fixture-driven validation against SciPy reference outputs across every API surface. The fork is the place that contract lives in SciR's tree.
+- Downstream SciR crates (notably `scir-signal`) depend on this crate's path; pulling those deps back to a registry version creates an external coordination point for every SciPy-parity bug fix.
+- The fork is the cheapest place to land additive accessors, lints, edition bumps, and `no_std` work without negotiating each one upstream.
+
+When upstream lands compatible improvements, the fork **rebases or cherry-picks** them in — but maintains the SciR-side delta as a permanent superset.
 
 ## Versioning
 
-Tracks upstream `iir_filters@0.1.x`. Bumped to `0.1.4` to make the fork visible.
+Tracks upstream `iir_filters@0.1.x` lineage but versions independently under SciR's release cadence. Initial fork release: `0.1.4` shipped with SciR `v0.3.3`.
 
 ## License
 
-Apache-2.0, same as upstream.
+Apache-2.0, same as upstream. Original copyright preserved (`https://github.com/annoybot`); SciR additions copyright Softoboros Technology Inc.
