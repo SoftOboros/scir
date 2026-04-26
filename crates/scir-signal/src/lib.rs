@@ -1,14 +1,14 @@
 //! Signal processing utilities for SciR.
 #![deny(missing_docs)]
 
-use iir_filters::{
+use ndarray::Array1;
+use scir_iir_filters::{
     filter::{DirectForm2Transposed, Filter},
     filter_design::{butter as design_butter, FilterType},
     sos::zpk2sos,
 };
-use ndarray::Array1;
 
-pub use iir_filters::sos::Sos;
+pub use scir_iir_filters::sos::{Sos, SosCoeffs};
 
 /// Design a Butterworth low-pass filter and return SOS.
 ///

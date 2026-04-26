@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/scir-core",
+    "crates/scir-iir-filters",
     "crates/scir-nd",
     "crates/scir-fft",
     "crates/scir-signal",
@@ -15,6 +16,7 @@ exclude = [
 
 [patch.crates-io]
 scir-core = { path = "crates/scir-core" }
+scir-iir-filters = { path = "crates/scir-iir-filters" }
 scir-nd = { path = "crates/scir-nd" }
 scir-fft = { path = "crates/scir-fft" }
 scir-signal = { path = "crates/scir-signal" }
