@@ -14,7 +14,7 @@ use num_traits::{One, Pow, Zero};
 use std::f64::consts::PI;
 use std::ops::Range;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// Represents the type of filter to design, low pass, high pass etc.
 ///
 /// The enum values represent the cutoff frequencies: a single frequency for [LowPass][FilterType::LowPass]  and [HighPass][FilterType::HighPass] ,
