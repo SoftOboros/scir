@@ -136,6 +136,58 @@ pub fn bessel(order: u32, cutoff: f64) -> Sos {
         .expect("bessel design failed for valid LowPass parameters")
 }
 
+/// Design a 2nd-order IIR notch filter (single biquad). Mirrors
+/// `scipy.signal.iirnotch(w0, Q, fs)` exactly via the closed-form
+/// formula at `scipy/signal/_filter_design._design_notch_peak_filter`.
+///
+/// `w0` is the center frequency to remove; `q` is the notch quality
+/// factor (`Q = w0 / bw_-3dB`). When `fs` is supplied, `w0` is in the
+/// same units as `fs`; with `fs=2.0` (the SciPy normalized convention),
+/// `w0` is the normalized frequency `0 < w0 < 1`.
+///
+/// # Examples
+/// ```
+/// // 60 Hz notch at fs=200 Hz with Q=30 (matches the SciPy doc example).
+/// let sos = scir_signal::iirnotch(60.0, 30.0, 200.0).unwrap();
+/// assert_eq!(sos.num_sections(), 1);
+/// ```
+pub fn iirnotch(w0: f64, q: f64, fs: f64) -> Result<Sos, FilterError> {
+    use scir_iir_filters::errors::Error;
+    if fs <= 0.0 {
+        return Err(Error::IllegalArgument(format!(
+            "iirnotch: fs must be > 0; got {fs}"
+        )));
+    }
+    if q <= 0.0 || !q.is_finite() {
+        return Err(Error::IllegalArgument(format!(
+            "iirnotch: Q must be > 0 and finite; got {q}"
+        )));
+    }
+    let w0n = 2.0 * w0 / fs;
+    if !(0.0 < w0n && w0n < 1.0) {
+        return Err(Error::IllegalArgument(format!(
+            "iirnotch: normalized w0 must satisfy 0 < w0 < 1 \
+             (got w0={w0}, fs={fs} → w0_norm={w0n})"
+        )));
+    }
+    let bw = w0n / q;
+    let bw_rad = bw * core::f64::consts::PI;
+    let w0_rad = w0n * core::f64::consts::PI;
+    let beta = (bw_rad / 2.0).tan();
+    let gain = 1.0 / (1.0 + beta);
+    let cos_w0 = w0_rad.cos();
+    // SOS row layout: [b0, b1, b2, a0, a1, a2].
+    let row = [
+        gain,
+        -2.0 * gain * cos_w0,
+        gain,
+        1.0,
+        -2.0 * gain * cos_w0,
+        2.0 * gain - 1.0,
+    ];
+    Ok(Sos::from_vec(vec![row]))
+}
+
 /// Apply a second-order-section filter to input data.
 ///
 /// # Examples
@@ -372,6 +424,35 @@ mod tests {
             butter_filter(4, FilterType::HighPass(0.3), 2.0).expect("butter_filter HPF failed");
         let result = sosfilt(&sos, &input);
         assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
+    }
+
+    #[test]
+    fn iirnotch_design_matches_fixture() {
+        let Some(base) = fixtures_base() else {
+            eprintln!("[scir-signal] fixtures missing; skipping iirnotch_design_matches_fixture");
+            return;
+        };
+        let input: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("sosfilt_input.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("notch_output.npy")).unwrap()).unwrap();
+        // Same arguments as the fixture generator: w0=0.2, Q=30, fs=2.0.
+        let sos = iirnotch(0.2, 30.0, 2.0).expect("iirnotch failed");
+        let result = sosfilt(&sos, &input);
+        assert_close!(&result, &expected, array, atol = 1e-12, rtol = 1e-12);
+    }
+
+    #[test]
+    fn iirnotch_rejects_invalid_inputs() {
+        // Q ≤ 0 or non-finite
+        assert!(iirnotch(0.2, 0.0, 2.0).is_err());
+        assert!(iirnotch(0.2, -1.0, 2.0).is_err());
+        assert!(iirnotch(0.2, f64::NAN, 2.0).is_err());
+        // w0 outside (0, 1) (normalized)
+        assert!(iirnotch(0.0, 30.0, 2.0).is_err());
+        assert!(iirnotch(1.5, 30.0, 2.0).is_err());
+        // fs ≤ 0
+        assert!(iirnotch(60.0, 30.0, 0.0).is_err());
     }
 
     #[test]

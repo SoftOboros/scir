@@ -120,6 +120,28 @@ impl Emitter {
         Ok(self)
     }
 
+    /// Queue a 2nd-order IIR notch (single biquad). Mirrors
+    /// `scipy.signal.iirnotch(w0, Q, fs)`. `w0` is the center frequency
+    /// to remove (in the same units as `fs`); `q` is the notch quality
+    /// factor (`Q = w0 / bw_-3dB`).
+    pub fn add_iirnotch(
+        &mut self,
+        ident: &str,
+        w0: f64,
+        q: f64,
+        fs: f64,
+    ) -> Result<&mut Self, FilterError> {
+        let sos = scir_signal::iirnotch(w0, q, fs)?;
+        let doc = format!("iirnotch(w0={w0}, Q={q}, fs={fs})");
+        self.items.push(EmittedItem {
+            ident: ident.to_string(),
+            doc,
+            sections: sos_to_arrays(&sos),
+            as_f32: false,
+        });
+        Ok(self)
+    }
+
     /// Mark the most-recently-added item to emit as `[[f32; 6]; N]`
     /// (truncated from f64). Useful for embedded targets where the
     /// runtime biquad uses `f32` storage. The truncation is explicit
@@ -308,6 +330,27 @@ mod tests {
         let parsed = parse_first_static_table(&body, "LPF", 6);
         let parsed_sos = scir_signal::Sos::from_vec(parsed);
         let x = Array1::from((0..64).map(|i| (i as f64 * 0.1).sin()).collect::<Vec<_>>());
+        let direct_y = sosfilt(&direct, &x);
+        let parsed_y = sosfilt(&parsed_sos, &x);
+        for (a, b) in direct_y.iter().zip(parsed_y.iter()) {
+            assert_eq!(a, b, "filtered sample mismatch");
+        }
+    }
+
+    #[test]
+    fn emitted_iirnotch_filters_identically_to_direct_scir() {
+        let mut e = Emitter::new();
+        e.add_iirnotch("NOTCH_60HZ", 60.0, 30.0, 200.0).unwrap();
+
+        let direct = scir_signal::iirnotch(60.0, 30.0, 200.0).unwrap();
+
+        let body = e.render();
+        let parsed = parse_first_static_table(&body, "NOTCH_60HZ", 6);
+        assert_eq!(parsed.len(), 1, "iirnotch is always a single biquad");
+        let parsed_sos = scir_signal::Sos::from_vec(parsed);
+        let x = Array1::from(
+            (0..128).map(|i| (i as f64 * 0.05).sin()).collect::<Vec<_>>(),
+        );
         let direct_y = sosfilt(&direct, &x);
         let parsed_y = sosfilt(&parsed_sos, &x);
         for (a, b) in direct_y.iter().zip(parsed_y.iter()) {
