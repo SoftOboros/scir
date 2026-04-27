@@ -22,7 +22,7 @@ use std::fmt::Write as _;
 use std::io;
 use std::path::Path;
 
-pub use scir_signal::{FilterError, FilterType};
+pub use scir_signal::{BesselNorm, FilterError, FilterType};
 
 const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -101,7 +101,8 @@ impl Emitter {
 
     /// Queue a Bessel design (phase normalization). Supported orders
     /// are bounded by `scir_iir_filters::filter_design::MAX_BESSEL_ORDER`
-    /// (currently 25).
+    /// (currently 25). For non-default normalizations see
+    /// [`Emitter::add_bessel_with_norm`].
     pub fn add_bessel(
         &mut self,
         ident: &str,
@@ -111,6 +112,29 @@ impl Emitter {
     ) -> Result<&mut Self, FilterError> {
         let sos = scir_signal::bessel_filter(order, kind, fs)?;
         let doc = format!("bessel(order={order}, kind={kind:?}, fs={fs}, norm=phase)");
+        self.items.push(EmittedItem {
+            ident: ident.to_string(),
+            doc,
+            sections: sos_to_arrays(&sos),
+            as_f32: false,
+        });
+        Ok(self)
+    }
+
+    /// Queue a Bessel design with explicit normalization choice. Symmetry
+    /// with the runtime `scir_signal::bessel_filter_with_norm` API. See
+    /// [`BesselNorm`] for the per-norm magnitude / phase / group-delay
+    /// properties.
+    pub fn add_bessel_with_norm(
+        &mut self,
+        ident: &str,
+        order: u32,
+        norm: BesselNorm,
+        kind: FilterType,
+        fs: f64,
+    ) -> Result<&mut Self, FilterError> {
+        let sos = scir_signal::bessel_filter_with_norm(order, norm, kind, fs)?;
+        let doc = format!("bessel(order={order}, kind={kind:?}, fs={fs}, norm={norm:?})");
         self.items.push(EmittedItem {
             ident: ident.to_string(),
             doc,
@@ -356,6 +380,48 @@ mod tests {
         for (a, b) in direct_y.iter().zip(parsed_y.iter()) {
             assert_eq!(a, b, "filtered sample mismatch");
         }
+    }
+
+    #[test]
+    fn emitted_bessel_with_delay_norm_filters_identically_to_direct_scir() {
+        let order = 4;
+        let kind = FilterType::LowPass(0.2);
+        let fs = 2.0;
+
+        let mut e = Emitter::new();
+        e.add_bessel_with_norm("LPF_DELAY", order, BesselNorm::Delay, kind, fs)
+            .unwrap();
+
+        let direct = scir_signal::bessel_filter_with_norm(order, BesselNorm::Delay, kind, fs)
+            .unwrap();
+
+        let body = e.render();
+        let parsed = parse_first_static_table(&body, "LPF_DELAY", 6);
+        let parsed_sos = scir_signal::Sos::from_vec(parsed);
+        let x = Array1::from((0..64).map(|i| (i as f64 * 0.1).sin()).collect::<Vec<_>>());
+        let direct_y = sosfilt(&direct, &x);
+        let parsed_y = sosfilt(&parsed_sos, &x);
+        for (a, b) in direct_y.iter().zip(parsed_y.iter()) {
+            assert_eq!(a, b, "filtered sample mismatch");
+        }
+    }
+
+    #[test]
+    fn add_bessel_with_norm_phase_matches_add_bessel() {
+        // Default-norm symmetry: add_bessel and add_bessel_with_norm(Phase)
+        // MUST produce byte-identical renders for the same parameters.
+        let mut a = Emitter::new();
+        a.add_bessel("X", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        let mut b = Emitter::new();
+        b.add_bessel_with_norm("X", 4, BesselNorm::Phase, FilterType::LowPass(0.2), 2.0)
+            .unwrap();
+        // Doc lines differ slightly (norm=phase vs norm=Phase), but the
+        // emitted SOS rows must be byte-identical.
+        let body_a = a.render();
+        let body_b = b.render();
+        let table_a = parse_first_static_table(&body_a, "X", 6);
+        let table_b = parse_first_static_table(&body_b, "X", 6);
+        assert_eq!(table_a, table_b);
     }
 
     #[test]
