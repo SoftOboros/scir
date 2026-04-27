@@ -214,6 +214,45 @@ pub fn iirnotch(w0: f64, q: f64, fs: f64) -> Result<Sos, FilterError> {
     Ok(Sos::from_vec(vec![row]))
 }
 
+/// Notch presets for common rejection frequencies.
+///
+/// Pure-ergonomics layer over [`iirnotch`]. Each preset is a one-line
+/// wrapper that pre-fills a sensible center frequency + Q for common
+/// embedded / audio use cases. The non-`with_q` variants default to
+/// `Q = 30.0`, the textbook value for AC mains hum rejection (sharp
+/// enough to leave musical content untouched, wide enough to cover
+/// real-world line-frequency drift).
+pub mod presets {
+    use super::{iirnotch, FilterError, Sos};
+
+    /// AC mains rejection at 50 Hz (Europe, most of Asia + Africa,
+    /// Australia, parts of South America). Q = 30. For applications
+    /// needing a different Q, use [`mains_50hz_notch_with_q`].
+    pub fn mains_50hz_notch(fs: f64) -> Result<Sos, FilterError> {
+        iirnotch(50.0, 30.0, fs)
+    }
+
+    /// AC mains rejection at 60 Hz (Americas, parts of Asia, parts of
+    /// Africa). Q = 30. For applications needing a different Q, use
+    /// [`mains_60hz_notch_with_q`].
+    pub fn mains_60hz_notch(fs: f64) -> Result<Sos, FilterError> {
+        iirnotch(60.0, 30.0, fs)
+    }
+
+    /// AC mains rejection at 50 Hz with caller-specified Q. Typical
+    /// audio range is `Q ∈ 5..=100`; lower Q rejects a wider band but
+    /// affects more nearby content, higher Q is sharper but more
+    /// sensitive to line-frequency drift.
+    pub fn mains_50hz_notch_with_q(fs: f64, q: f64) -> Result<Sos, FilterError> {
+        iirnotch(50.0, q, fs)
+    }
+
+    /// AC mains rejection at 60 Hz with caller-specified Q.
+    pub fn mains_60hz_notch_with_q(fs: f64, q: f64) -> Result<Sos, FilterError> {
+        iirnotch(60.0, q, fs)
+    }
+}
+
 /// Apply a second-order-section filter to input data.
 ///
 /// # Examples
@@ -508,6 +547,31 @@ mod tests {
             assert_eq!(x.a1, y.a1);
             assert_eq!(x.a2, y.a2);
         }
+    }
+
+    #[test]
+    fn notch_presets_match_inline_iirnotch() {
+        // The presets module is a pure passthrough to iirnotch with
+        // pre-filled (frequency, Q) tuples. Each preset MUST produce
+        // byte-identical SOS to the equivalent inline call.
+        let fs = 48_000.0;
+
+        let direct_50 = iirnotch(50.0, 30.0, fs).unwrap();
+        let preset_50 = presets::mains_50hz_notch(fs).unwrap();
+        assert_eq!(direct_50.to_arrays(), preset_50.to_arrays());
+
+        let direct_60 = iirnotch(60.0, 30.0, fs).unwrap();
+        let preset_60 = presets::mains_60hz_notch(fs).unwrap();
+        assert_eq!(direct_60.to_arrays(), preset_60.to_arrays());
+
+        // _with_q variants override the Q while keeping the frequency.
+        let direct_50_q15 = iirnotch(50.0, 15.0, fs).unwrap();
+        let preset_50_q15 = presets::mains_50hz_notch_with_q(fs, 15.0).unwrap();
+        assert_eq!(direct_50_q15.to_arrays(), preset_50_q15.to_arrays());
+
+        let direct_60_q15 = iirnotch(60.0, 15.0, fs).unwrap();
+        let preset_60_q15 = presets::mains_60hz_notch_with_q(fs, 15.0).unwrap();
+        assert_eq!(direct_60_q15.to_arrays(), preset_60_q15.to_arrays());
     }
 
     #[test]
