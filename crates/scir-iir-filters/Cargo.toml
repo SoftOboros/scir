@@ -5,7 +5,7 @@ authors = [
     "https://github.com/annoybot",
     "Softoboros Technology Inc.",
 ]
-description = "SciR fork of iir_filters: Apache-2.0 IIR filter design (Butterworth + Chebyshev I, ZPK, SOS) with public Sos accessors so downstream realtime DSP runtimes can read designed coefficients. Builds for `no_std + alloc` (libm-backed math); std mode is default and additionally implements `std::error::Error`. Tracks upstream iir_filters@0.1.3 with SciR-side additions."
+description = "SciR fork of iir_filters: Apache-2.0 IIR filter design (Butterworth, Chebyshev I, Bessel; ZPK, SOS) with public Sos accessors so downstream realtime DSP runtimes can read designed coefficients. Builds for `no_std + alloc` (libm-backed math); std mode is default and additionally implements `std::error::Error`. Tracks upstream iir_filters@0.1.3 with SciR-side additions."
 license = "Apache-2.0"
 repository = "https://github.com/SoftOboros/scir"
 edition = "2021"

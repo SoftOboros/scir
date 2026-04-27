@@ -4,9 +4,13 @@
 use ndarray::Array1;
 use scir_iir_filters::{
     filter::{DirectForm2Transposed, Filter},
-    filter_design::{butter as design_butter, cheby1 as design_cheby1},
+    filter_design::{
+        bessel as design_bessel, butter as design_butter, cheby1 as design_cheby1,
+    },
     sos::zpk2sos,
 };
+
+pub use scir_iir_filters::filter_design::MAX_BESSEL_ORDER;
 
 pub use scir_iir_filters::errors::Error as FilterError;
 pub use scir_iir_filters::filter_design::FilterType;
@@ -89,13 +93,35 @@ pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
         .expect("cheby1 design failed for valid LowPass parameters")
 }
 
-/// Return a Bessel low-pass filter (order=4, cutoff=0.2).
+/// Design a Bessel filter (phase normalization) across all four
+/// [`FilterType`] variants and return SOS form. Mirrors
+/// `scipy.signal.bessel(N, Wn, btype, fs=fs, output='sos', norm='phase')`.
 ///
-/// **Stub.** Bessel poles are roots of reverse Bessel polynomials and have
-/// no closed form; a full Bessel design needs tabulated roots or a
-/// polynomial root finder. Tracked as scir-issue #04 (besselap). For now
-/// this returns the SciPy-precomputed coefficients only when called with
-/// the historical fixture parameters (order=4, cutoff=0.2).
+/// Supported orders are `1..=`[`MAX_BESSEL_ORDER`] (tabulated SciPy/mpmath-
+/// precomputed pole list lives in `scir-iir-filters`); orders outside
+/// that range return a [`FilterError::IllegalArgument`].
+///
+/// # Examples
+/// ```
+/// use scir_signal::FilterType;
+/// // Equivalent to scipy.signal.bessel(4, 200, btype='highpass', fs=1000, output='sos')
+/// let sos = scir_signal::bessel_filter(4, FilterType::HighPass(200.0), 1000.0).unwrap();
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let _y = scir_signal::sosfilt(&sos, &x);
+/// ```
+pub fn bessel_filter(
+    order: u32,
+    filter_type: FilterType,
+    fs: f64,
+) -> Result<Sos, FilterError> {
+    let zpk = design_bessel(order, filter_type, fs)?;
+    zpk2sos(&zpk, None)
+}
+
+/// Design a Bessel **low-pass** filter on the SciPy normalized-frequency
+/// convention (`fs=2`).
+///
+/// Thin wrapper over [`bessel_filter`] preserved for backward compatibility.
 ///
 /// # Examples
 /// ```
@@ -106,18 +132,8 @@ pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
 /// assert_eq!(y.len(), x.len());
 /// ```
 pub fn bessel(order: u32, cutoff: f64) -> Sos {
-    assert!(order == 4 && (cutoff - 0.2).abs() < 1e-12);
-    Sos::from_vec(vec![
-        [
-            0.00428742,
-            0.00857484,
-            0.00428742,
-            1.0,
-            -1.07701239,
-            0.30094304,
-        ],
-        [1.0, 2.0, 1.0, 1.0, -1.14096126, 0.44730040],
-    ])
+    bessel_filter(order, FilterType::LowPass(cutoff), 2.0)
+        .expect("bessel design failed for valid LowPass parameters")
 }
 
 /// Apply a second-order-section filter to input data.
@@ -354,6 +370,24 @@ mod tests {
             ReadNpyExt::read_npy(File::open(base.join("butter_hp_output.npy")).unwrap()).unwrap();
         let sos =
             butter_filter(4, FilterType::HighPass(0.3), 2.0).expect("butter_filter HPF failed");
+        let result = sosfilt(&sos, &input);
+        assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
+    }
+
+    #[test]
+    fn bessel_highpass_design_matches_fixture() {
+        let Some(base) = fixtures_base() else {
+            eprintln!(
+                "[scir-signal] fixtures missing; skipping bessel_highpass_design_matches_fixture"
+            );
+            return;
+        };
+        let input: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("sosfilt_input.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("bessel_hp_output.npy")).unwrap()).unwrap();
+        let sos =
+            bessel_filter(4, FilterType::HighPass(0.3), 2.0).expect("bessel_filter HPF failed");
         let result = sosfilt(&sos, &input);
         assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
     }

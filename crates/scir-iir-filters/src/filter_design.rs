@@ -1,9 +1,11 @@
 //! Functions for designing iir filters.
 //!
-//! Currently supports Butterworth ([`butter`]) and Chebyshev Type I
-//! ([`cheby1`]) prototypes through the same lp2*_zpk + bilinear pipeline
-//! across all four [`FilterType`] variants. Bessel and Chebyshev II are
-//! tracked as future work — see the SciR signal-processing roadmap.
+//! Currently supports Butterworth ([`butter`]), Chebyshev Type I
+//! ([`cheby1`]), and Bessel ([`bessel`], phase normalization, orders
+//! 1..=[`MAX_BESSEL_ORDER`]) prototypes through the same lp2*_zpk +
+//! bilinear pipeline across all four [`FilterType`] variants.
+//! Chebyshev II and elliptic prototypes are tracked as future work —
+//! see the SciR signal-processing roadmap.
 
 use alloc::format;
 use alloc::string::ToString;
@@ -45,7 +47,19 @@ enum FilterAlgorithm {
     Butterworth,
     /// Chebyshev Type I; carries passband ripple in dB.
     Chebyshev1(f64),
+    /// Bessel (phase normalization). Order is bounded by the tabulated
+    /// pole list; see `MAX_BESSEL_ORDER`.
+    Bessel,
 }
+
+/// Maximum supported order for the Bessel design path.
+///
+/// Bessel poles are roots of reverse Bessel polynomials and have no
+/// closed form. We tabulate SciPy-precomputed (mpmath-derived) phase-
+/// normalized poles for orders 1..=25; orders outside that range
+/// return `IllegalArgument`. This matches the practical range used by
+/// most analog/digital DSP libraries.
+pub const MAX_BESSEL_ORDER: u32 = 25;
 
 /// Filter parameters in Zero, Pole, Gain format.
 pub struct ZPKCoeffs {
@@ -92,6 +106,26 @@ pub fn butter(N: u32, filter_type: FilterType, fs: f64) -> Result<ZPKCoeffs, Err
 
 fn butter_internal(N: u32, filter_type: FilterType, fs: Option<f64>) -> Result<ZPKCoeffs, Error> {
     iirfilter(N, filter_type, FilterAlgorithm::Butterworth, fs)
+}
+
+/// Designs an Nth-order Bessel filter (phase normalization).
+///
+/// Mirrors `scipy.signal.bessel(N, Wn, btype, fs=fs)` with `norm='phase'`
+/// (the SciPy default). Supported orders are `1..=`[`MAX_BESSEL_ORDER`];
+/// orders outside that range return `IllegalArgument`.
+///
+/// # Example
+///```rust
+/// use scir_iir_filters::filter_design::bessel;
+/// use scir_iir_filters::filter_design::FilterType;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let zpk = bessel(4, FilterType::LowPass(0.2), 2.0)?;
+///     return Ok( () );
+///  }
+/// ```
+pub fn bessel(N: u32, filter_type: FilterType, fs: f64) -> Result<ZPKCoeffs, Error> {
+    iirfilter(N, filter_type, FilterAlgorithm::Bessel, Some(fs))
 }
 
 /// Designs an Nth-order Chebyshev Type I filter.
@@ -190,6 +224,7 @@ fn iirfilter(
     let zpk = match algorithm {
         FilterAlgorithm::Butterworth => butterap(N)?,
         FilterAlgorithm::Chebyshev1(rp) => cheb1ap(N, rp)?,
+        FilterAlgorithm::Bessel => besselap(N)?,
     };
 
     let zpk = match filter_type {
@@ -230,6 +265,41 @@ fn iirfilter(
     let zpk = bilinear_zpk(&zpk, fs)?;
 
     Ok(zpk)
+}
+
+/// Return [ZPKCoeffs] for the analog prototype of an Nth-order Bessel
+/// filter, phase-normalized so that the magnitude is `1/sqrt(2)` at
+/// w = 1 rad/s. Mirrors `scipy.signal.besselap(N, norm='phase')`.
+///
+/// Bessel poles are roots of reverse Bessel polynomials and have no
+/// closed form, so the implementation is a table lookup against
+/// SciPy/mpmath-precomputed values for orders 1..=[`MAX_BESSEL_ORDER`].
+fn besselap(N: u32) -> Result<ZPKCoeffs, Error> {
+    if N == 0 {
+        // Degenerate case mirrors scipy: empty z, empty p, k=1.
+        return Ok(ZPKCoeffs {
+            z: vec![],
+            p: vec![],
+            k: 1.0,
+        });
+    }
+    if N > MAX_BESSEL_ORDER {
+        return Err(IllegalArgument(format!(
+            "besselap: order {} exceeds tabulated range 1..={}; \
+             extend `bessel_tables.rs` via `scripts/gen_bessel_tables.py` \
+             (mpmath-precomputed) to support higher orders",
+            N, MAX_BESSEL_ORDER
+        )));
+    }
+    let row = &crate::bessel_tables::BESSEL_AP_PHASE_POLES[(N - 1) as usize];
+    let poles: Vec<Complex64> = row.iter().map(|(re, im)| Complex64::new(*re, *im)).collect();
+    Ok(ZPKCoeffs {
+        z: vec![],
+        p: poles,
+        // Phase norm gives k=1 by construction (poles are renormalized
+        // so prod(-p) == 1).
+        k: 1.0,
+    })
 }
 
 /// Return [ZPKCoeffs] for analog prototype of Nth-order Chebyshev Type I filter.
@@ -607,6 +677,72 @@ mod tests {
     #[test]
     fn test_cheby1_highpass_designs_without_error() {
         let zpk = super::cheby1(4, 1.0, HighPass(0.2), 2.0).expect("cheby1 failed");
+        assert_eq!(zpk.p.len(), 4);
+        for p in &zpk.p {
+            assert!(p.norm() < 1.0, "pole {:?} outside unit circle", p);
+        }
+    }
+
+    #[test]
+    fn test_besselap_n0_returns_empty() {
+        let zpk = besselap(0).expect("besselap(0)");
+        assert!(zpk.z.is_empty());
+        assert!(zpk.p.is_empty());
+        assert_eq!(zpk.k, 1.0);
+    }
+
+    #[test]
+    fn test_besselap_n1_single_real_pole_at_minus_one() {
+        // The first-order Bessel pole (phase norm) is -1 + 0j by construction.
+        let zpk = besselap(1).expect("besselap(1)");
+        assert_eq!(zpk.p.len(), 1);
+        assert_approx_eq!(zpk.p[0], cplx!(-1.0, 0.0), 1E-12, "N=1 pole");
+        assert_eq!(zpk.k, 1.0);
+        assert!(zpk.z.is_empty());
+    }
+
+    #[test]
+    fn test_besselap_n4_pole_invariants() {
+        let zpk = besselap(4).expect("besselap(4)");
+        assert_eq!(zpk.p.len(), 4);
+        assert!(zpk.z.is_empty());
+        // All poles in left half plane.
+        for p in &zpk.p {
+            assert!(p.re < 0.0, "pole {:?} not in LHP", p);
+        }
+        // Conjugate pairs: imaginary parts come as ±x pairs (sum to 0).
+        let im_sum: f64 = zpk.p.iter().map(|p| p.im).sum();
+        assert!(
+            im_sum.abs() < 1E-12,
+            "imaginary parts not conjugate-symmetric: sum={}",
+            im_sum
+        );
+        // Phase norm: |prod(-p)| should equal 1.
+        let mut prod = Complex::<f64>::one();
+        for p in &zpk.p {
+            prod *= -p;
+        }
+        assert_approx_eq!(prod.norm(), 1.0, 1E-12, "phase norm violated");
+    }
+
+    #[test]
+    fn test_besselap_rejects_order_above_table() {
+        let err = besselap(MAX_BESSEL_ORDER + 1);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_bessel_lowpass_designs_without_error() {
+        let zpk = super::bessel(4, LowPass(0.2), 2.0).expect("bessel LPF");
+        assert_eq!(zpk.p.len(), 4);
+        for p in &zpk.p {
+            assert!(p.norm() < 1.0, "pole {:?} outside unit circle", p);
+        }
+    }
+
+    #[test]
+    fn test_bessel_highpass_designs_without_error() {
+        let zpk = super::bessel(4, HighPass(0.2), 2.0).expect("bessel HPF");
         assert_eq!(zpk.p.len(), 4);
         for p in &zpk.p {
             assert!(p.norm() < 1.0, "pole {:?} outside unit circle", p);

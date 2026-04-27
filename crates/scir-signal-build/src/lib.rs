@@ -99,6 +99,27 @@ impl Emitter {
         Ok(self)
     }
 
+    /// Queue a Bessel design (phase normalization). Supported orders
+    /// are bounded by `scir_iir_filters::filter_design::MAX_BESSEL_ORDER`
+    /// (currently 25).
+    pub fn add_bessel(
+        &mut self,
+        ident: &str,
+        order: u32,
+        kind: FilterType,
+        fs: f64,
+    ) -> Result<&mut Self, FilterError> {
+        let sos = scir_signal::bessel_filter(order, kind, fs)?;
+        let doc = format!("bessel(order={order}, kind={kind:?}, fs={fs}, norm=phase)");
+        self.items.push(EmittedItem {
+            ident: ident.to_string(),
+            doc,
+            sections: sos_to_arrays(&sos),
+            as_f32: false,
+        });
+        Ok(self)
+    }
+
     /// Mark the most-recently-added item to emit as `[[f32; 6]; N]`
     /// (truncated from f64). Useful for embedded targets where the
     /// runtime biquad uses `f32` storage. The truncation is explicit
@@ -270,6 +291,36 @@ mod tests {
         for (a, b) in direct_y.iter().zip(parsed_y.iter()) {
             assert_eq!(a, b, "filtered sample mismatch");
         }
+    }
+
+    #[test]
+    fn emitted_bessel_lpf_filters_identically_to_direct_scir() {
+        let order = 4;
+        let kind = FilterType::LowPass(0.2);
+        let fs = 2.0;
+
+        let mut e = Emitter::new();
+        e.add_bessel("LPF", order, kind, fs).unwrap();
+
+        let direct = scir_signal::bessel_filter(order, kind, fs).unwrap();
+
+        let body = e.render();
+        let parsed = parse_first_static_table(&body, "LPF", 6);
+        let parsed_sos = scir_signal::Sos::from_vec(parsed);
+        let x = Array1::from((0..64).map(|i| (i as f64 * 0.1).sin()).collect::<Vec<_>>());
+        let direct_y = sosfilt(&direct, &x);
+        let parsed_y = sosfilt(&parsed_sos, &x);
+        for (a, b) in direct_y.iter().zip(parsed_y.iter()) {
+            assert_eq!(a, b, "filtered sample mismatch");
+        }
+    }
+
+    #[test]
+    fn add_bessel_rejects_order_above_table() {
+        let mut e = Emitter::new();
+        // MAX_BESSEL_ORDER=25; 26 is out of range.
+        let err = e.add_bessel("OOPS", 26, FilterType::LowPass(0.2), 2.0);
+        assert!(err.is_err());
     }
 
     #[test]

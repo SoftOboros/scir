@@ -68,6 +68,8 @@ extern crate alloc;
 pub mod errors;
 pub mod filter_design;
 
+mod bessel_tables;
+
 #[doc(hidden)]
 pub mod macros;
 
