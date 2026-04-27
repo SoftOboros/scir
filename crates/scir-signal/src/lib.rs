@@ -5,7 +5,8 @@ use ndarray::Array1;
 use scir_iir_filters::{
     filter::{DirectForm2Transposed, Filter},
     filter_design::{
-        bessel as design_bessel, butter as design_butter, cheby1 as design_cheby1,
+        bessel as design_bessel, bessel_with_norm as design_bessel_with_norm,
+        butter as design_butter, cheby1 as design_cheby1,
     },
     sos::zpk2sos,
 };
@@ -13,7 +14,7 @@ use scir_iir_filters::{
 pub use scir_iir_filters::filter_design::MAX_BESSEL_ORDER;
 
 pub use scir_iir_filters::errors::Error as FilterError;
-pub use scir_iir_filters::filter_design::FilterType;
+pub use scir_iir_filters::filter_design::{BesselNorm, FilterType};
 pub use scir_iir_filters::sos::{Sos, SosCoeffs};
 
 /// Design a Butterworth filter across all four [`FilterType`] variants
@@ -115,6 +116,31 @@ pub fn bessel_filter(
     fs: f64,
 ) -> Result<Sos, FilterError> {
     let zpk = design_bessel(order, filter_type, fs)?;
+    zpk2sos(&zpk, None)
+}
+
+/// Like [`bessel_filter`] but with explicit Bessel normalization choice.
+/// Mirrors `scipy.signal.bessel(N, Wn, btype, fs=fs, norm=...)` across
+/// all three [`BesselNorm`] variants. See [`BesselNorm`] for the per-norm
+/// magnitude / phase / group-delay properties.
+///
+/// # Examples
+/// ```
+/// use scir_signal::{BesselNorm, FilterType};
+/// // Maximally flat group delay = 1; -3 dB at ω=1 rad/s.
+/// let sos =
+///     scir_signal::bessel_filter_with_norm(4, BesselNorm::Mag, FilterType::LowPass(0.2), 2.0)
+///         .unwrap();
+/// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
+/// let _y = scir_signal::sosfilt(&sos, &x);
+/// ```
+pub fn bessel_filter_with_norm(
+    order: u32,
+    norm: BesselNorm,
+    filter_type: FilterType,
+    fs: f64,
+) -> Result<Sos, FilterError> {
+    let zpk = design_bessel_with_norm(order, norm, filter_type, fs)?;
     zpk2sos(&zpk, None)
 }
 
@@ -424,6 +450,64 @@ mod tests {
             butter_filter(4, FilterType::HighPass(0.3), 2.0).expect("butter_filter HPF failed");
         let result = sosfilt(&sos, &input);
         assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
+    }
+
+    #[test]
+    fn bessel_lowpass_delay_norm_matches_fixture() {
+        let Some(base) = fixtures_base() else {
+            eprintln!(
+                "[scir-signal] fixtures missing; skipping bessel_lowpass_delay_norm_matches_fixture"
+            );
+            return;
+        };
+        let input: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("sosfilt_input.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("bessel_lp_delay_output.npy")).unwrap())
+                .unwrap();
+        let sos = bessel_filter_with_norm(4, BesselNorm::Delay, FilterType::LowPass(0.2), 2.0)
+            .expect("bessel_filter_with_norm Delay");
+        let result = sosfilt(&sos, &input);
+        assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
+    }
+
+    #[test]
+    fn bessel_lowpass_mag_norm_matches_fixture() {
+        let Some(base) = fixtures_base() else {
+            eprintln!(
+                "[scir-signal] fixtures missing; skipping bessel_lowpass_mag_norm_matches_fixture"
+            );
+            return;
+        };
+        let input: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("sosfilt_input.npy")).unwrap()).unwrap();
+        let expected: Array1<f64> =
+            ReadNpyExt::read_npy(File::open(base.join("bessel_lp_mag_output.npy")).unwrap())
+                .unwrap();
+        let sos = bessel_filter_with_norm(4, BesselNorm::Mag, FilterType::LowPass(0.2), 2.0)
+            .expect("bessel_filter_with_norm Mag");
+        let result = sosfilt(&sos, &input);
+        assert_close!(&result, &expected, array, atol = 1e-6, rtol = 1e-6);
+    }
+
+    #[test]
+    fn bessel_phase_norm_default_matches_explicit() {
+        // bessel_filter (default phase) and bessel_filter_with_norm(Phase)
+        // MUST produce byte-identical SOS for the same parameters.
+        let a = bessel_filter(4, FilterType::HighPass(0.3), 2.0).unwrap();
+        let b = bessel_filter_with_norm(4, BesselNorm::Phase, FilterType::HighPass(0.3), 2.0)
+            .unwrap();
+        let arr_a = a.sections();
+        let arr_b = b.sections();
+        assert_eq!(arr_a.len(), arr_b.len());
+        for (x, y) in arr_a.iter().zip(arr_b.iter()) {
+            assert_eq!(x.b0, y.b0);
+            assert_eq!(x.b1, y.b1);
+            assert_eq!(x.b2, y.b2);
+            assert_eq!(x.a0, y.a0);
+            assert_eq!(x.a1, y.a1);
+            assert_eq!(x.a2, y.a2);
+        }
     }
 
     #[test]

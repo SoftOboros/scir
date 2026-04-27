@@ -40,6 +40,36 @@ pub enum FilterType {
     BandStop(f64, f64),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+/// Bessel filter normalization, mirroring SciPy's `besselap(N, norm=...)`.
+///
+/// The three norms differ by a per-order rescaling of the same Bessel-
+/// polynomial roots (plus a per-norm gain `k`):
+///
+/// - [`Phase`][BesselNorm::Phase] — magnitude is `1/sqrt(2)` at ω=1 rad/s.
+///   Default; matches SciPy + MATLAB. `k = 1` by construction.
+/// - [`Delay`][BesselNorm::Delay] — maximally flat group delay = 1; the
+///   "natural" form obtained by solving Bessel polynomials directly.
+///   `k = a_last = (2N)! / (2^N * N!)` per order.
+/// - [`Mag`][BesselNorm::Mag] — `-3 dB` at ω=1 rad/s. Bond's "frequency
+///   normalization". Requires a numerical -3 dB cutoff per order; we use
+///   the SciPy-precomputed values from the tabulated `bessel_tables`
+///   so the runtime path stays no_std-clean (no root-finder).
+pub enum BesselNorm {
+    /// Phase normalization (magnitude 1/sqrt(2) at ω=1). SciPy default.
+    Phase,
+    /// Delay normalization (group delay = 1).
+    Delay,
+    /// Magnitude normalization (-3 dB at ω=1).
+    Mag,
+}
+
+impl Default for BesselNorm {
+    fn default() -> Self {
+        BesselNorm::Phase
+    }
+}
+
 #[derive(Debug, PartialEq)]
 /// Represents the algorithm or 'category' of the filter to design, i.e: Butterworth, Chebyshev, etc...
 #[allow(missing_docs)]
@@ -47,9 +77,9 @@ enum FilterAlgorithm {
     Butterworth,
     /// Chebyshev Type I; carries passband ripple in dB.
     Chebyshev1(f64),
-    /// Bessel (phase normalization). Order is bounded by the tabulated
-    /// pole list; see `MAX_BESSEL_ORDER`.
-    Bessel,
+    /// Bessel; carries normalization choice. Order is bounded by the
+    /// tabulated pole list; see `MAX_BESSEL_ORDER`.
+    Bessel(BesselNorm),
 }
 
 /// Maximum supported order for the Bessel design path.
@@ -108,11 +138,13 @@ fn butter_internal(N: u32, filter_type: FilterType, fs: Option<f64>) -> Result<Z
     iirfilter(N, filter_type, FilterAlgorithm::Butterworth, fs)
 }
 
-/// Designs an Nth-order Bessel filter (phase normalization).
+/// Designs an Nth-order Bessel filter with phase normalization (SciPy default).
 ///
-/// Mirrors `scipy.signal.bessel(N, Wn, btype, fs=fs)` with `norm='phase'`
-/// (the SciPy default). Supported orders are `1..=`[`MAX_BESSEL_ORDER`];
-/// orders outside that range return `IllegalArgument`.
+/// Mirrors `scipy.signal.bessel(N, Wn, btype, fs=fs)` with `norm='phase'`.
+/// Supported orders are `1..=`[`MAX_BESSEL_ORDER`]; orders outside that range
+/// return `IllegalArgument`.
+///
+/// For non-default normalizations see [`bessel_with_norm`].
 ///
 /// # Example
 ///```rust
@@ -125,7 +157,21 @@ fn butter_internal(N: u32, filter_type: FilterType, fs: Option<f64>) -> Result<Z
 ///  }
 /// ```
 pub fn bessel(N: u32, filter_type: FilterType, fs: f64) -> Result<ZPKCoeffs, Error> {
-    iirfilter(N, filter_type, FilterAlgorithm::Bessel, Some(fs))
+    iirfilter(N, filter_type, FilterAlgorithm::Bessel(BesselNorm::Phase), Some(fs))
+}
+
+/// Designs an Nth-order Bessel filter with explicit normalization choice.
+///
+/// Mirrors `scipy.signal.bessel(N, Wn, btype, fs=fs, norm=...)` across all
+/// three [`BesselNorm`] variants. See [`BesselNorm`] for the per-norm
+/// magnitude / phase / group-delay properties.
+pub fn bessel_with_norm(
+    N: u32,
+    norm: BesselNorm,
+    filter_type: FilterType,
+    fs: f64,
+) -> Result<ZPKCoeffs, Error> {
+    iirfilter(N, filter_type, FilterAlgorithm::Bessel(norm), Some(fs))
 }
 
 /// Designs an Nth-order Chebyshev Type I filter.
@@ -224,7 +270,7 @@ fn iirfilter(
     let zpk = match algorithm {
         FilterAlgorithm::Butterworth => butterap(N)?,
         FilterAlgorithm::Chebyshev1(rp) => cheb1ap(N, rp)?,
-        FilterAlgorithm::Bessel => besselap(N)?,
+        FilterAlgorithm::Bessel(norm) => besselap(N, norm)?,
     };
 
     let zpk = match filter_type {
@@ -268,13 +314,15 @@ fn iirfilter(
 }
 
 /// Return [ZPKCoeffs] for the analog prototype of an Nth-order Bessel
-/// filter, phase-normalized so that the magnitude is `1/sqrt(2)` at
-/// w = 1 rad/s. Mirrors `scipy.signal.besselap(N, norm='phase')`.
+/// filter under the requested [`BesselNorm`]. Mirrors
+/// `scipy.signal.besselap(N, norm=...)`.
 ///
 /// Bessel poles are roots of reverse Bessel polynomials and have no
 /// closed form, so the implementation is a table lookup against
 /// SciPy/mpmath-precomputed values for orders 1..=[`MAX_BESSEL_ORDER`].
-fn besselap(N: u32) -> Result<ZPKCoeffs, Error> {
+/// All three norms ship as separate `const` slices in `bessel_tables.rs`
+/// so the runtime path is a pure lookup (no root-finder, no_std-clean).
+fn besselap(N: u32, norm: BesselNorm) -> Result<ZPKCoeffs, Error> {
     if N == 0 {
         // Degenerate case mirrors scipy: empty z, empty p, k=1.
         return Ok(ZPKCoeffs {
@@ -291,14 +339,26 @@ fn besselap(N: u32) -> Result<ZPKCoeffs, Error> {
             N, MAX_BESSEL_ORDER
         )));
     }
-    let row = &crate::bessel_tables::BESSEL_AP_PHASE_POLES[(N - 1) as usize];
+    let idx = (N - 1) as usize;
+    let (row, k) = match norm {
+        BesselNorm::Phase => (
+            crate::bessel_tables::BESSEL_AP_PHASE_POLES[idx],
+            crate::bessel_tables::BESSEL_AP_PHASE_POLES_GAINS[idx],
+        ),
+        BesselNorm::Delay => (
+            crate::bessel_tables::BESSEL_AP_DELAY_POLES[idx],
+            crate::bessel_tables::BESSEL_AP_DELAY_POLES_GAINS[idx],
+        ),
+        BesselNorm::Mag => (
+            crate::bessel_tables::BESSEL_AP_MAG_POLES[idx],
+            crate::bessel_tables::BESSEL_AP_MAG_POLES_GAINS[idx],
+        ),
+    };
     let poles: Vec<Complex64> = row.iter().map(|(re, im)| Complex64::new(*re, *im)).collect();
     Ok(ZPKCoeffs {
         z: vec![],
         p: poles,
-        // Phase norm gives k=1 by construction (poles are renormalized
-        // so prod(-p) == 1).
-        k: 1.0,
+        k,
     })
 }
 
@@ -685,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_besselap_n0_returns_empty() {
-        let zpk = besselap(0).expect("besselap(0)");
+        let zpk = besselap(0, BesselNorm::Phase).expect("besselap(0, BesselNorm::Phase)");
         assert!(zpk.z.is_empty());
         assert!(zpk.p.is_empty());
         assert_eq!(zpk.k, 1.0);
@@ -694,7 +754,7 @@ mod tests {
     #[test]
     fn test_besselap_n1_single_real_pole_at_minus_one() {
         // The first-order Bessel pole (phase norm) is -1 + 0j by construction.
-        let zpk = besselap(1).expect("besselap(1)");
+        let zpk = besselap(1, BesselNorm::Phase).expect("besselap(1, BesselNorm::Phase)");
         assert_eq!(zpk.p.len(), 1);
         assert_approx_eq!(zpk.p[0], cplx!(-1.0, 0.0), 1E-12, "N=1 pole");
         assert_eq!(zpk.k, 1.0);
@@ -703,7 +763,7 @@ mod tests {
 
     #[test]
     fn test_besselap_n4_pole_invariants() {
-        let zpk = besselap(4).expect("besselap(4)");
+        let zpk = besselap(4, BesselNorm::Phase).expect("besselap(4, BesselNorm::Phase)");
         assert_eq!(zpk.p.len(), 4);
         assert!(zpk.z.is_empty());
         // All poles in left half plane.
@@ -727,7 +787,7 @@ mod tests {
 
     #[test]
     fn test_besselap_rejects_order_above_table() {
-        let err = besselap(MAX_BESSEL_ORDER + 1);
+        let err = besselap(MAX_BESSEL_ORDER + 1, BesselNorm::Phase);
         assert!(err.is_err());
     }
 
