@@ -11,7 +11,10 @@ use scir_iir_filters::{
     sos::zpk2sos,
 };
 
+pub mod window;
+
 pub use scir_iir_filters::filter_design::MAX_BESSEL_ORDER;
+pub use window::{window as window_eval, WindowShape};
 
 pub use scir_iir_filters::errors::Error as FilterError;
 pub use scir_iir_filters::filter_design::{BesselNorm, FilterType};

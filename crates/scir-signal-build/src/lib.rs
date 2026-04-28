@@ -22,17 +22,37 @@ use std::fmt::Write as _;
 use std::io;
 use std::path::Path;
 
-pub use scir_signal::{BesselNorm, FilterError, FilterType};
+pub use scir_signal::{BesselNorm, FilterError, FilterType, WindowShape};
 
 const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// One baked filter table queued for emission.
+/// One baked table queued for emission. Discriminates between
+/// biquad-SOS items (`[[T; 6]; N]`) and window items (`[T; N]`).
 #[derive(Debug, Clone)]
-struct EmittedItem {
-    ident: String,
-    doc: String,
-    sections: Vec<[f64; 6]>,
-    as_f32: bool,
+enum EmittedItem {
+    /// A biquad SOS table — Butterworth, Chebyshev, Bessel, notch.
+    Biquad {
+        ident: String,
+        doc: String,
+        sections: Vec<[f64; 6]>,
+        as_f32: bool,
+    },
+    /// A window amplitude table — Hann, Blackman-Harris, flat-top.
+    Window {
+        ident: String,
+        doc: String,
+        samples: Vec<f64>,
+        as_f32: bool,
+    },
+}
+
+impl EmittedItem {
+    fn set_as_f32(&mut self) {
+        match self {
+            EmittedItem::Biquad { as_f32, .. } => *as_f32 = true,
+            EmittedItem::Window { as_f32, .. } => *as_f32 = true,
+        }
+    }
 }
 
 /// Build-time coefficient-table emitter.
@@ -70,7 +90,7 @@ impl Emitter {
     ) -> Result<&mut Self, FilterError> {
         let sos = scir_signal::butter_filter(order, kind, fs)?;
         let doc = format!("butter(order={order}, kind={kind:?}, fs={fs})");
-        self.items.push(EmittedItem {
+        self.items.push(EmittedItem::Biquad {
             ident: ident.to_string(),
             doc,
             sections: sos_to_arrays(&sos),
@@ -90,7 +110,7 @@ impl Emitter {
     ) -> Result<&mut Self, FilterError> {
         let sos = scir_signal::cheby1_filter(order, ripple, kind, fs)?;
         let doc = format!("cheby1(order={order}, rp={ripple}, kind={kind:?}, fs={fs})");
-        self.items.push(EmittedItem {
+        self.items.push(EmittedItem::Biquad {
             ident: ident.to_string(),
             doc,
             sections: sos_to_arrays(&sos),
@@ -112,7 +132,7 @@ impl Emitter {
     ) -> Result<&mut Self, FilterError> {
         let sos = scir_signal::bessel_filter(order, kind, fs)?;
         let doc = format!("bessel(order={order}, kind={kind:?}, fs={fs}, norm=phase)");
-        self.items.push(EmittedItem {
+        self.items.push(EmittedItem::Biquad {
             ident: ident.to_string(),
             doc,
             sections: sos_to_arrays(&sos),
@@ -135,7 +155,7 @@ impl Emitter {
     ) -> Result<&mut Self, FilterError> {
         let sos = scir_signal::bessel_filter_with_norm(order, norm, kind, fs)?;
         let doc = format!("bessel(order={order}, kind={kind:?}, fs={fs}, norm={norm:?})");
-        self.items.push(EmittedItem {
+        self.items.push(EmittedItem::Biquad {
             ident: ident.to_string(),
             doc,
             sections: sos_to_arrays(&sos),
@@ -157,7 +177,7 @@ impl Emitter {
     ) -> Result<&mut Self, FilterError> {
         let sos = scir_signal::iirnotch(w0, q, fs)?;
         let doc = format!("iirnotch(w0={w0}, Q={q}, fs={fs})");
-        self.items.push(EmittedItem {
+        self.items.push(EmittedItem::Biquad {
             ident: ident.to_string(),
             doc,
             sections: sos_to_arrays(&sos),
@@ -166,13 +186,49 @@ impl Emitter {
         Ok(self)
     }
 
-    /// Mark the most-recently-added item to emit as `[[f32; 6]; N]`
-    /// (truncated from f64). Useful for embedded targets where the
-    /// runtime biquad uses `f32` storage. The truncation is explicit
-    /// and recorded in the emitted item's doc comment.
+    /// Queue a window amplitude table. `ident` becomes the `pub static`
+    /// identifier in the emitted source. `length` is the window's sample
+    /// count.
+    ///
+    /// The emitted shape is `pub static IDENT: [f64; N]` (single-array,
+    /// not nested) — distinguishing window items from biquad SOS items
+    /// at a glance. Apply [`Emitter::as_f32`] to narrow the storage.
+    ///
+    /// `length == 0` queues an empty array (well-defined but unusual);
+    /// `length == 1` queues `[1.0]` (degenerate but well-defined).
+    /// Closed-form math per [`scir_signal::window`] — see the per-shape
+    /// docs on [`WindowShape`].
+    pub fn add_window(
+        &mut self,
+        ident: &str,
+        shape: WindowShape,
+        length: usize,
+    ) -> &mut Self {
+        let samples = scir_signal::window::window(shape, length);
+        let doc = match shape {
+            WindowShape::Hann => format!("hann(length={length})"),
+            WindowShape::BlackmanHarris4Term => {
+                format!("blackman_harris_4term(length={length})")
+            }
+            WindowShape::FlatTop => format!("flat_top(length={length})"),
+        };
+        self.items.push(EmittedItem::Window {
+            ident: ident.to_string(),
+            doc,
+            samples,
+            as_f32: false,
+        });
+        self
+    }
+
+    /// Mark the most-recently-added item to emit as `f32` (truncated
+    /// from f64). For biquad items the storage shape becomes
+    /// `[[f32; 6]; N]`; for window items it becomes `[f32; N]`. Useful
+    /// for embedded targets that use `f32` storage. The truncation is
+    /// explicit and recorded in the emitted item's doc comment.
     pub fn as_f32(&mut self) -> &mut Self {
         if let Some(item) = self.items.last_mut() {
-            item.as_f32 = true;
+            item.set_as_f32();
         }
         self
     }
@@ -198,34 +254,65 @@ impl Emitter {
         out.push('\n');
 
         for item in &self.items {
-            let _ = writeln!(out, "/// {}", item.doc);
-            if item.as_f32 {
-                let _ = writeln!(out, "/// (truncated from f64 to f32 at emission)");
-            }
-            let n = item.sections.len();
-            let ty = if item.as_f32 { "f32" } else { "f64" };
-            let _ = writeln!(
-                out,
-                "pub static {ident}: [[{ty}; 6]; {n}] = [",
-                ident = item.ident,
-            );
-            for section in &item.sections {
-                out.push_str("    [");
-                for (i, c) in section.iter().enumerate() {
-                    if i > 0 {
-                        out.push_str(", ");
+            match item {
+                EmittedItem::Biquad {
+                    ident,
+                    doc,
+                    sections,
+                    as_f32,
+                } => {
+                    let _ = writeln!(out, "/// {doc}");
+                    if *as_f32 {
+                        let _ = writeln!(out, "/// (truncated from f64 to f32 at emission)");
                     }
-                    if item.as_f32 {
-                        let v = *c as f32;
-                        let _ = write!(out, "{v:.9e}_f32");
-                    } else {
-                        let _ = write!(out, "{c:.17e}_f64");
+                    let n = sections.len();
+                    let ty = if *as_f32 { "f32" } else { "f64" };
+                    let _ = writeln!(out, "pub static {ident}: [[{ty}; 6]; {n}] = [");
+                    for section in sections {
+                        out.push_str("    [");
+                        for (i, c) in section.iter().enumerate() {
+                            if i > 0 {
+                                out.push_str(", ");
+                            }
+                            if *as_f32 {
+                                let v = *c as f32;
+                                let _ = write!(out, "{v:.9e}_f32");
+                            } else {
+                                let _ = write!(out, "{c:.17e}_f64");
+                            }
+                        }
+                        out.push_str("],\n");
                     }
+                    let _ = writeln!(out, "];");
+                    out.push('\n');
                 }
-                out.push_str("],\n");
+                EmittedItem::Window {
+                    ident,
+                    doc,
+                    samples,
+                    as_f32,
+                } => {
+                    let _ = writeln!(out, "/// {doc}");
+                    if *as_f32 {
+                        let _ = writeln!(out, "/// (truncated from f64 to f32 at emission)");
+                    }
+                    let n = samples.len();
+                    let ty = if *as_f32 { "f32" } else { "f64" };
+                    let _ = writeln!(out, "pub static {ident}: [{ty}; {n}] = [");
+                    for sample in samples {
+                        out.push_str("    ");
+                        if *as_f32 {
+                            let v = *sample as f32;
+                            let _ = write!(out, "{v:.9e}_f32");
+                        } else {
+                            let _ = write!(out, "{sample:.17e}_f64");
+                        }
+                        out.push_str(",\n");
+                    }
+                    let _ = writeln!(out, "];");
+                    out.push('\n');
+                }
             }
-            let _ = writeln!(out, "];");
-            out.push('\n');
         }
         out
     }
@@ -479,6 +566,151 @@ mod tests {
         // cutoff out of (0, 1) range for fs=2.0 → scir rejects.
         let err = e.add_butter("BAD", 4, FilterType::LowPass(2.5), 2.0);
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn add_window_hann_round_trips_to_closed_form() {
+        let mut e = Emitter::new();
+        e.add_window("HANN_64", WindowShape::Hann, 64);
+        let body = e.render();
+        let parsed = parse_first_static_window(&body, "HANN_64");
+        let expected = scir_signal::window::window(WindowShape::Hann, 64);
+        assert_eq!(parsed.len(), 64);
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn add_window_blackman_harris_round_trips() {
+        let mut e = Emitter::new();
+        e.add_window("BH4_128", WindowShape::BlackmanHarris4Term, 128);
+        let body = e.render();
+        let parsed = parse_first_static_window(&body, "BH4_128");
+        let expected = scir_signal::window::window(WindowShape::BlackmanHarris4Term, 128);
+        assert_eq!(parsed.len(), 128);
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn add_window_flat_top_round_trips() {
+        let mut e = Emitter::new();
+        e.add_window("FLAT_256", WindowShape::FlatTop, 256);
+        let body = e.render();
+        let parsed = parse_first_static_window(&body, "FLAT_256");
+        let expected = scir_signal::window::window(WindowShape::FlatTop, 256);
+        assert_eq!(parsed.len(), 256);
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn add_window_renders_single_array_shape_not_nested() {
+        let mut e = Emitter::new();
+        e.add_window("HANN_8", WindowShape::Hann, 8);
+        let body = e.render();
+        // Window emits `[f64; 8]`, NOT `[[f64; 6]; 8]`.
+        assert!(
+            body.contains("pub static HANN_8: [f64; 8]"),
+            "expected single-array window shape:\n{body}"
+        );
+        assert!(
+            !body.contains("[[f64"),
+            "window must not emit nested SOS shape:\n{body}"
+        );
+    }
+
+    #[test]
+    fn add_window_as_f32_emits_truncated_f32_array() {
+        let mut e = Emitter::new();
+        e.add_window("HANN_16", WindowShape::Hann, 16);
+        e.as_f32();
+        let body = e.render();
+        assert!(body.contains("pub static HANN_16: [f32; 16]"));
+        assert!(body.contains("_f32"));
+        assert!(!body.contains("HANN_16: [f64"));
+    }
+
+    #[test]
+    fn add_window_zero_length_emits_empty_array() {
+        let mut e = Emitter::new();
+        e.add_window("EMPTY", WindowShape::Hann, 0);
+        let body = e.render();
+        assert!(body.contains("pub static EMPTY: [f64; 0]"));
+    }
+
+    #[test]
+    fn add_window_one_length_emits_unity() {
+        let mut e = Emitter::new();
+        e.add_window("ONE", WindowShape::FlatTop, 1);
+        let body = e.render();
+        assert!(body.contains("pub static ONE: [f64; 1]"));
+        // Degenerate: w[0] = 1.0 by convention.
+        let parsed = parse_first_static_window(&body, "ONE");
+        assert_eq!(parsed, vec![1.0]);
+    }
+
+    #[test]
+    fn add_window_render_is_byte_deterministic() {
+        let mut e1 = Emitter::new();
+        e1.add_window("A", WindowShape::Hann, 32);
+        let mut e2 = Emitter::new();
+        e2.add_window("A", WindowShape::Hann, 32);
+        assert_eq!(e1.render(), e2.render());
+    }
+
+    #[test]
+    fn mixed_biquad_and_window_emit_in_order() {
+        let mut e = Emitter::new();
+        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        e.add_window("WIN", WindowShape::Hann, 16);
+        e.add_butter("HPF", 4, FilterType::HighPass(0.4), 2.0).unwrap();
+        let body = e.render();
+        // All three idents present.
+        assert!(body.contains("pub static LPF: [[f64; 6];"));
+        assert!(body.contains("pub static WIN: [f64; 16]"));
+        assert!(body.contains("pub static HPF: [[f64; 6];"));
+        // Order preserved.
+        let pos_lpf = body.find("pub static LPF:").unwrap();
+        let pos_win = body.find("pub static WIN:").unwrap();
+        let pos_hpf = body.find("pub static HPF:").unwrap();
+        assert!(pos_lpf < pos_win);
+        assert!(pos_win < pos_hpf);
+    }
+
+    #[test]
+    fn window_as_f32_does_not_affect_prior_biquad_item() {
+        let mut e = Emitter::new();
+        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        // No as_f32 between biquad and window — biquad stays f64.
+        e.add_window("WIN", WindowShape::Hann, 8);
+        e.as_f32();
+        let body = e.render();
+        assert!(body.contains("pub static LPF: [[f64; 6];"));
+        assert!(body.contains("pub static WIN: [f32; 8]"));
+    }
+
+    /// Parse a `pub static IDENT: [<ty>; N] = [...]` flat-array block
+    /// emitted by [`Emitter::add_window`]. Returns the f64 sample values.
+    fn parse_first_static_window(body: &str, ident: &str) -> Vec<f64> {
+        let needle = format!("pub static {ident}:");
+        let start = body.find(&needle).expect("ident not found");
+        let after = &body[start..];
+        let eq_marker = "] = [";
+        let eq = after.find(eq_marker).expect("array literal start");
+        let body = &after[eq + eq_marker.len()..];
+        let close = body.find("];").expect("array literal close");
+        let table_text = &body[..close];
+        let mut samples = Vec::new();
+        for line in table_text.lines() {
+            let line = line.trim();
+            if line.is_empty() || !line.ends_with(',') {
+                continue;
+            }
+            let token = line
+                .trim_end_matches(',')
+                .trim_end_matches("_f64")
+                .trim_end_matches("_f32");
+            samples.push(token.parse::<f64>().expect("number parse"));
+        }
+        samples
     }
 
     /// Extract the f64 literals from the first `pub static IDENT: ...` block
