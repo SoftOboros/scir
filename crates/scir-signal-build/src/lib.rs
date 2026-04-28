@@ -26,6 +26,37 @@ pub use scir_signal::{BesselNorm, FilterError, FilterType, WindowShape};
 
 const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Layout convention for FFT bin label arrays.
+///
+/// Specification Required registration policy — adding a value
+/// requires a phase-owner walkthrough but no §15 amendment to a
+/// CONCEPTS doc. Removing or renaming a value is a breaking change.
+/// The enum is intentionally NOT `#[non_exhaustive]`; matching MUST
+/// be exhaustive at the call site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FftLayout {
+    /// Standard one-sided real-input FFT layout: bins 0..=N/2 carry
+    /// unique magnitudes. Total bins emitted: `N/2 + 1` (DC through
+    /// Nyquist inclusive).
+    OneSidedReal,
+}
+
+fn bin_centers_hz(n: usize, fs: f64, layout: FftLayout) -> Vec<f64> {
+    match layout {
+        FftLayout::OneSidedReal => {
+            let m = n / 2 + 1;
+            if n == 0 {
+                // For n=0 the bin width fs/n is undefined; emit a
+                // single DC bin at 0 Hz to keep the array shape
+                // consistent (m = 0/2 + 1 = 1).
+                return vec![0.0];
+            }
+            let denom = n as f64;
+            (0..m).map(|k| k as f64 * fs / denom).collect()
+        }
+    }
+}
+
 /// One baked table queued for emission. Discriminates between
 /// biquad-SOS items (`[[T; 6]; N]`) and window items (`[T; N]`).
 #[derive(Debug, Clone)]
@@ -37,8 +68,10 @@ enum EmittedItem {
         sections: Vec<[f64; 6]>,
         as_f32: bool,
     },
-    /// A window amplitude table — Hann, Blackman-Harris, flat-top.
-    Window {
+    /// A flat 1D table — windows, FFT bin labels, future 1D primitives.
+    /// Both windows and bin labels share the `[T; N]` emit shape; this
+    /// variant unifies them.
+    Array1d {
         ident: String,
         doc: String,
         samples: Vec<f64>,
@@ -50,7 +83,7 @@ impl EmittedItem {
     fn set_as_f32(&mut self) {
         match self {
             EmittedItem::Biquad { as_f32, .. } => *as_f32 = true,
-            EmittedItem::Window { as_f32, .. } => *as_f32 = true,
+            EmittedItem::Array1d { as_f32, .. } => *as_f32 = true,
         }
     }
 }
@@ -212,7 +245,37 @@ impl Emitter {
             }
             WindowShape::FlatTop => format!("flat_top(length={length})"),
         };
-        self.items.push(EmittedItem::Window {
+        self.items.push(EmittedItem::Array1d {
+            ident: ident.to_string(),
+            doc,
+            samples,
+            as_f32: false,
+        });
+        self
+    }
+
+    /// Queue an FFT bin-center frequency table. `ident` becomes the
+    /// `pub static` identifier in the emitted source. `n` is the FFT
+    /// size and `fs` is the sample rate in Hz; `layout` chooses the
+    /// bin layout convention.
+    ///
+    /// For [`FftLayout::OneSidedReal`] (the only v1 layout), `N/2 + 1`
+    /// bins are emitted, covering DC through Nyquist inclusive. The
+    /// emit shape is `pub static IDENT: [f64; N/2+1]` (or `[f32; ...]`
+    /// with `as_f32`) — same flat-array shape as windows.
+    ///
+    /// Edge cases: `n == 0` and `n == 1` both yield a single-element
+    /// array `[0.0]` (DC bin only); `n == 2` yields `[0.0, fs/2]`.
+    pub fn add_fft_bin_labels(
+        &mut self,
+        ident: &str,
+        n: usize,
+        fs: f64,
+        layout: FftLayout,
+    ) -> &mut Self {
+        let samples = bin_centers_hz(n, fs, layout);
+        let doc = format!("fft_bin_centers_hz(n={n}, fs={fs}, layout={layout:?})");
+        self.items.push(EmittedItem::Array1d {
             ident: ident.to_string(),
             doc,
             samples,
@@ -286,7 +349,7 @@ impl Emitter {
                     let _ = writeln!(out, "];");
                     out.push('\n');
                 }
-                EmittedItem::Window {
+                EmittedItem::Array1d {
                     ident,
                     doc,
                     samples,
@@ -685,6 +748,114 @@ mod tests {
         let body = e.render();
         assert!(body.contains("pub static LPF: [[f64; 6];"));
         assert!(body.contains("pub static WIN: [f32; 8]"));
+    }
+
+    #[test]
+    fn add_fft_bin_labels_one_sided_real_round_trips() {
+        let mut e = Emitter::new();
+        e.add_fft_bin_labels("BIN_HZ", 1024, 48_000.0, FftLayout::OneSidedReal);
+        let body = e.render();
+        let parsed = parse_first_static_window(&body, "BIN_HZ");
+        assert_eq!(parsed.len(), 513, "OneSidedReal yields N/2+1 bins");
+        for (k, &got) in parsed.iter().enumerate() {
+            let expected = k as f64 * 48_000.0 / 1024.0;
+            assert_eq!(got, expected, "bin {k} mismatch");
+        }
+    }
+
+    #[test]
+    fn add_fft_bin_labels_dc_and_nyquist() {
+        let mut e = Emitter::new();
+        e.add_fft_bin_labels("BIN", 8, 16_000.0, FftLayout::OneSidedReal);
+        let body = e.render();
+        let parsed = parse_first_static_window(&body, "BIN");
+        assert_eq!(parsed.len(), 5);
+        assert_eq!(parsed[0], 0.0, "DC bin");
+        assert_eq!(parsed[4], 8000.0, "Nyquist bin = fs/2");
+    }
+
+    #[test]
+    fn add_fft_bin_labels_renders_single_array_shape() {
+        let mut e = Emitter::new();
+        e.add_fft_bin_labels("BIN_8", 8, 48_000.0, FftLayout::OneSidedReal);
+        let body = e.render();
+        // OneSidedReal at N=8 emits N/2+1 = 5 bins as flat [f64; 5].
+        assert!(
+            body.contains("pub static BIN_8: [f64; 5]"),
+            "expected single-array bin-label shape:\n{body}"
+        );
+        assert!(!body.contains("[[f64"), "must not emit nested SOS shape");
+    }
+
+    #[test]
+    fn add_fft_bin_labels_as_f32_narrows() {
+        let mut e = Emitter::new();
+        e.add_fft_bin_labels("BIN_F32", 16, 44_100.0, FftLayout::OneSidedReal);
+        e.as_f32();
+        let body = e.render();
+        assert!(body.contains("pub static BIN_F32: [f32; 9]"));
+        assert!(body.contains("_f32"));
+        assert!(!body.contains("BIN_F32: [f64"));
+    }
+
+    #[test]
+    fn add_fft_bin_labels_edge_case_n_zero() {
+        let mut e = Emitter::new();
+        e.add_fft_bin_labels("EMPTY", 0, 48_000.0, FftLayout::OneSidedReal);
+        let body = e.render();
+        // n=0: m = 0/2+1 = 1, single DC bin at 0 Hz.
+        assert!(body.contains("pub static EMPTY: [f64; 1]"));
+        let parsed = parse_first_static_window(&body, "EMPTY");
+        assert_eq!(parsed, vec![0.0]);
+    }
+
+    #[test]
+    fn add_fft_bin_labels_edge_case_n_one() {
+        let mut e = Emitter::new();
+        e.add_fft_bin_labels("ONE", 1, 48_000.0, FftLayout::OneSidedReal);
+        let body = e.render();
+        // n=1: m = 1/2+1 = 1, single DC bin (k=0).
+        assert!(body.contains("pub static ONE: [f64; 1]"));
+        let parsed = parse_first_static_window(&body, "ONE");
+        assert_eq!(parsed, vec![0.0]);
+    }
+
+    #[test]
+    fn add_fft_bin_labels_edge_case_n_two() {
+        let mut e = Emitter::new();
+        e.add_fft_bin_labels("TWO", 2, 48_000.0, FftLayout::OneSidedReal);
+        let body = e.render();
+        // n=2: m = 2/2+1 = 2, [DC, Nyquist] = [0, 24000].
+        assert!(body.contains("pub static TWO: [f64; 2]"));
+        let parsed = parse_first_static_window(&body, "TWO");
+        assert_eq!(parsed, vec![0.0, 24_000.0]);
+    }
+
+    #[test]
+    fn add_fft_bin_labels_render_is_byte_deterministic() {
+        let mut e1 = Emitter::new();
+        e1.add_fft_bin_labels("A", 256, 48_000.0, FftLayout::OneSidedReal);
+        let mut e2 = Emitter::new();
+        e2.add_fft_bin_labels("A", 256, 48_000.0, FftLayout::OneSidedReal);
+        assert_eq!(e1.render(), e2.render());
+    }
+
+    #[test]
+    fn mixed_biquad_window_and_bin_labels_emit_in_order() {
+        let mut e = Emitter::new();
+        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        e.add_window("WIN", WindowShape::Hann, 16);
+        e.add_fft_bin_labels("BIN", 16, 48_000.0, FftLayout::OneSidedReal);
+        let body = e.render();
+        assert!(body.contains("pub static LPF: [[f64; 6];"));
+        assert!(body.contains("pub static WIN: [f64; 16]"));
+        assert!(body.contains("pub static BIN: [f64; 9]"));
+        // Order preserved.
+        let pos_lpf = body.find("pub static LPF:").unwrap();
+        let pos_win = body.find("pub static WIN:").unwrap();
+        let pos_bin = body.find("pub static BIN:").unwrap();
+        assert!(pos_lpf < pos_win);
+        assert!(pos_win < pos_bin);
     }
 
     /// Parse a `pub static IDENT: [<ty>; N] = [...]` flat-array block

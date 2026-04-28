@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "scir-signal-build"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "ndarray",
  "scir-signal",
