@@ -29,7 +29,7 @@ pub enum Device {
 #[derive(Debug)]
 pub enum GpuError {
     /// Backend is not available on this build or platform.
-    BackendUnavailable(&'static str),
+    BackendUnavailable(String),
     /// Operation failed due to incompatible shapes.
     ShapeMismatch,
 }
@@ -244,7 +244,7 @@ impl DeviceArray<f32> {
                 Device::Cpu => self.mul_scalar(1.0f32).add_scalar(alpha), // reuse CPU path
                 Device::Cuda => {
                     let mut out = vec![0.0f32; self.host.len()];
-                    if let Err(_) = crate::add_scalar_f32_cuda(&self.host, alpha, &mut out) {
+                    if crate::add_scalar_f32_cuda(&self.host, alpha, &mut out).is_err() {
                         // Fallback to CPU on failure
                         return self.mul_scalar(1.0f32).add_scalar(alpha);
                     }
@@ -282,7 +282,7 @@ impl DeviceArray<f32> {
                 (Device::Cpu, Device::Cpu) => self.add(other),
                 (Device::Cuda, Device::Cuda) => {
                     let mut out = vec![0.0f32; self.host.len()];
-                    if let Err(_) = crate::add_vec_f32_cuda(&self.host, &other.host, &mut out) {
+                    if crate::add_vec_f32_cuda(&self.host, &other.host, &mut out).is_err() {
                         // Fallback to CPU on failure
                         return self.add(other);
                     }
@@ -318,7 +318,7 @@ impl DeviceArray<f32> {
                 Device::Cpu => self.mul_scalar(alpha),
                 Device::Cuda => {
                     let mut out = vec![0.0f32; self.host.len()];
-                    if let Err(_) = crate::mul_scalar_f32_cuda(&self.host, alpha, &mut out) {
+                    if crate::mul_scalar_f32_cuda(&self.host, alpha, &mut out).is_err() {
                         return self.mul_scalar(alpha);
                     }
                     DeviceArray {
@@ -354,16 +354,15 @@ impl DeviceArray<f32> {
 /// assert_eq!(y.shape(), &[1, 4]);
 /// ```
 pub fn fir1d_batched_f32_auto(x: &Array2<f32>, taps: &Array1<f32>, device: Device) -> Array2<f32> {
-    /// FIR over each row of `x` using `taps` with device dispatch (CUDA when available).
     #[cfg(feature = "cuda")]
     {
-        return match device {
+        match device {
             Device::Cpu => fir1d_batched_f32(x, taps),
-            Device::Cuda => match crate::fir1d_batched_f32_cuda(x, taps) {
+            Device::Cuda => match fir1d_batched_f32_cuda(x, taps) {
                 Ok(y) => y,
                 Err(_) => fir1d_batched_f32(x, taps),
             },
-        };
+        }
     }
     #[cfg(not(feature = "cuda"))]
     {
@@ -426,10 +425,11 @@ mod cuda {
         if res == CUDA_SUCCESS {
             Ok(())
         } else {
-            Err(GpuError::BackendUnavailable(msg))
+            Err(GpuError::BackendUnavailable(msg.to_string()))
         }
     }
 
+    #[allow(dead_code)]
     pub fn cuda_available() -> bool {
         unsafe {
             cuInit(0) == CUDA_SUCCESS && {
@@ -674,6 +674,10 @@ L_DONE:
         Ok(func)
     }
 
+    /// Compute elementwise vector addition on CUDA.
+    ///
+    /// # Errors
+    /// Returns [`GpuError::BackendUnavailable`] if a CUDA dispatch call fails.
     pub fn add_vec_f32_cuda(a: &[f32], b: &[f32], out: &mut [f32]) -> Result<(), GpuError> {
         assert_eq!(a.len(), b.len());
         assert_eq!(a.len(), out.len());
@@ -711,7 +715,7 @@ L_DONE:
             ];
 
             let block = 256u32;
-            let grid = ((n + block - 1) / block) as u32;
+            let grid = n.div_ceil(block);
             check(
                 cuLaunchKernel(
                     func,
@@ -742,6 +746,10 @@ L_DONE:
         }
     }
 
+    /// Compute scalar addition on CUDA: `out[i] = a[i] + alpha`.
+    ///
+    /// # Errors
+    /// Returns [`GpuError::BackendUnavailable`] if a CUDA dispatch call fails.
     pub fn add_scalar_f32_cuda(a: &[f32], alpha: f32, out: &mut [f32]) -> Result<(), GpuError> {
         assert_eq!(a.len(), out.len());
         let n = a.len() as u32;
@@ -771,7 +779,7 @@ L_DONE:
             ];
 
             let block = 256u32;
-            let grid = ((n + block - 1) / block) as u32;
+            let grid = n.div_ceil(block);
             check(
                 cuLaunchKernel(
                     func,
@@ -800,6 +808,10 @@ L_DONE:
         }
     }
 
+    /// Compute scalar multiplication on CUDA: `out[i] = a[i] * alpha`.
+    ///
+    /// # Errors
+    /// Returns [`GpuError::BackendUnavailable`] if a CUDA dispatch call fails.
     pub fn mul_scalar_f32_cuda(a: &[f32], alpha: f32, out: &mut [f32]) -> Result<(), GpuError> {
         assert_eq!(a.len(), out.len());
         let n = a.len() as u32;
@@ -829,7 +841,7 @@ L_DONE:
             ];
 
             let block = 256u32;
-            let grid = ((n + block - 1) / block) as u32;
+            let grid = n.div_ceil(block);
             check(
                 cuLaunchKernel(
                     func,
@@ -858,13 +870,17 @@ L_DONE:
         }
     }
 
+    /// CUDA 1D batched FIR filter, one row at a time.
+    ///
+    /// # Errors
+    /// Returns [`GpuError::BackendUnavailable`] if a CUDA dispatch call fails.
     pub fn fir1d_batched_f32_cuda(
         x: &Array2<f32>,
         taps: &Array1<f32>,
     ) -> Result<Array2<f32>, GpuError> {
         let (b, n) = x.dim();
         let k = taps.len();
-        let mut x_host = x.to_owned().into_raw_vec();
+        let x_host = x.to_owned().into_raw_vec();
         let taps_host = taps.as_slice().unwrap();
         let mut out_host = vec![0.0f32; b * n];
         unsafe {
@@ -907,7 +923,7 @@ L_DONE:
 
             let total = (b * n) as u32;
             let block = 256u32;
-            let grid = ((total + block - 1) / block) as u32;
+            let grid = total.div_ceil(block);
             check(
                 cuLaunchKernel(
                     func,
@@ -939,7 +955,7 @@ L_DONE:
 }
 
 #[cfg(feature = "cuda")]
-pub use cuda::{add_scalar_f32_cuda, add_vec_f32_cuda, mul_scalar_f32_cuda};
+pub use cuda::{add_scalar_f32_cuda, add_vec_f32_cuda, fir1d_batched_f32_cuda, mul_scalar_f32_cuda};
 
 /// Causal FIR over each row of `x` using `taps` (CPU baseline, f32).
 ///

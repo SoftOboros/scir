@@ -148,6 +148,13 @@ pub(crate) fn is_real(x: Complex<f64>) -> bool {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::approx_constant,
+    clippy::excessive_precision,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic
+)]
 mod tests {
     use crate::assert_approx_eq;
     use crate::errors::Error::IllegalArgument;

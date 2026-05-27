@@ -51,7 +51,6 @@
 //! tracked as follow-on work in the SciR signal-processing roadmap.
 //!
 
-#![cfg_attr(nightly, feature(doc_auto_cfg))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(dead_code)]
 #![allow(non_snake_case)]

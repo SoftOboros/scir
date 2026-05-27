@@ -67,6 +67,13 @@ fn all_conjugates(roots: &[Complex<f64>]) -> Result<bool, Error> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::approx_constant,
+    clippy::excessive_precision,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic
+)]
 mod tests {
     use crate::vec_cplx;
     use crate::zpk2tf::{zpk2tf, BACoeffs};

@@ -4,7 +4,7 @@
 /// # Arguments
 ///
 /// The numbers are specified as a list of tuples.
-
+///
 /// # Example
 ///
 /// ```

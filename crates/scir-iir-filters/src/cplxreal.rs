@@ -17,10 +17,7 @@ pub fn cplxreal(
         return Ok((vec![], vec![]));
     }
 
-    let tol = match tol {
-        None => 100.0 * f64::EPSILON,
-        Some(value) => value,
-    };
+    let tol = tol.unwrap_or(100.0 * f64::EPSILON);
 
     //let mut z_abs: Vec<Complex<f64>> = z.iter().map(|x| cplx![x.re, x.im.abs()]).collect();
     sort_lex_with_map(&mut z, &[Re, Im], |c: &Complex<f64>| {
@@ -139,6 +136,13 @@ pub fn cplxreal(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::approx_constant,
+    clippy::excessive_precision,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic
+)]
 mod tests {
     use crate::assert_approx_eq;
     use crate::cplxreal::cplxreal;

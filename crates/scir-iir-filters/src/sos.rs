@@ -131,14 +131,14 @@ impl Default for Sos {
 ///
 /// * `ZPKCoeffs` - Zero Pole Gain representation of the sytem.
 /// * `pairing` - Optional [pairing](`SosPairing`) strategy.
-///               If pairing is None, pairing is set to 'nearest'.
+///   If pairing is `None`, pairing is set to `Nearest`.
 ///
 /// # Returns
 ///
 /// The requested filter in [`Sos`] format.
 ///
 /// # Notes
-
+///
 /// The algorithm used to convert ZPK to SOS format is designed to
 /// minimize errors due to numerical precision issues.
 ///
@@ -174,7 +174,7 @@ pub fn zpk2sos(zpk: &ZPKCoeffs, pairing: Option<SosPairing>) -> Result<Sos, Erro
                 ));
             }
 
-            n_sections = (p.len() + 1) / 2;
+            n_sections = p.len().div_ceil(2);
         }
         _ => {
             // Ensure we have the same number of poles and zeros, and make copies.
@@ -187,7 +187,7 @@ pub fn zpk2sos(zpk: &ZPKCoeffs, pairing: Option<SosPairing>) -> Result<Sos, Erro
                 max(p.len() as i32 - z.len() as i32, 0) as usize
             ]);
 
-            n_sections = (max(p.len(), z.len()) + 1) / 2;
+            n_sections = max(p.len(), z.len()).div_ceil(2);
 
             if p.len() % 2 == 1 && pairing == Nearest {
                 p.push(Complex::<f64>::zero());
@@ -445,6 +445,13 @@ fn find_and_remove_closest(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::approx_constant,
+    clippy::excessive_precision,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic
+)]
 mod tests {
     use num_complex::Complex;
     use rstest::rstest;

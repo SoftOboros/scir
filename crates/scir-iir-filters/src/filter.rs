@@ -100,6 +100,13 @@ impl Filter for DirectForm1 {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::approx_constant,
+    clippy::excessive_precision,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic
+)]
 mod tests {
     use crate::assert_approx_eq;
     use crate::filter::{DirectForm1, DirectForm2Transposed, Filter};

@@ -40,7 +40,7 @@ pub enum FilterType {
     BandStop(f64, f64),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 /// Bessel filter normalization, mirroring SciPy's `besselap(N, norm=...)`.
 ///
 /// The three norms differ by a per-order rescaling of the same Bessel-
@@ -57,17 +57,12 @@ pub enum FilterType {
 ///   so the runtime path stays no_std-clean (no root-finder).
 pub enum BesselNorm {
     /// Phase normalization (magnitude 1/sqrt(2) at ω=1). SciPy default.
+    #[default]
     Phase,
     /// Delay normalization (group delay = 1).
     Delay,
     /// Magnitude normalization (-3 dB at ω=1).
     Mag,
-}
-
-impl Default for BesselNorm {
-    fn default() -> Self {
-        BesselNorm::Phase
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -396,7 +391,7 @@ fn cheb1ap(N: u32, rp: f64) -> Result<ZPKCoeffs, Error> {
     let n_i = N as i32;
     let mut poles: Vec<Complex64> = Vec::with_capacity(N as usize);
     let mut m = -n_i + 1;
-    while m <= n_i - 1 {
+    while m < n_i {
         let theta = PI * (m as f64) / (2.0 * n_f);
         // -sinh(mu + j*theta) expanded using sinh(a+jb) = sinh(a)cos(b) + j cosh(a) sin(b)
         let re = -mu.sinh() * theta.cos();
@@ -411,7 +406,7 @@ fn cheb1ap(N: u32, rp: f64) -> Result<ZPKCoeffs, Error> {
         k_c *= -p;
     }
     let mut k = k_c.re;
-    if N % 2 == 0 {
+    if N.is_multiple_of(2) {
         k /= (1.0 + eps * eps).sqrt();
     }
 
@@ -659,6 +654,13 @@ fn negate(list: &[Complex<f64>]) -> Vec<Complex<f64>> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::approx_constant,
+    clippy::excessive_precision,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic
+)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;

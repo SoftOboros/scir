@@ -139,7 +139,6 @@ macro_rules! assert_close {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ndarray::Array1;
     use num_complex::Complex64;
 

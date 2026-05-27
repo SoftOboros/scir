@@ -363,6 +363,7 @@ pub fn resample_poly(input: &Array1<f64>, up: usize, down: usize) -> Array1<f64>
 
 // GPU-forwarded APIs (optional)
 #[cfg(feature = "gpu")]
+/// GPU-forwarded APIs (optional).
 pub mod gpu {
     use ndarray::{Array1, Array2};
     use scir_gpu::{fir1d_batched_f32_auto, Device};
@@ -681,7 +682,7 @@ mod tests {
         for bi in 0..b {
             for i in 0..n {
                 let mut acc = 0.0f32;
-                let start = if i + 1 >= k { i + 1 - k } else { 0 };
+                let start = (i + 1).saturating_sub(k);
                 for (t_idx, xi) in (start..=i).rev().enumerate() {
                     let tap = taps[k - 1 - t_idx];
                     acc += tap * x[[bi, xi]];
@@ -689,6 +690,8 @@ mod tests {
                 y_ref[[bi, i]] = acc;
             }
         }
-        assert_close!(&y.into_raw_vec(), &y_ref.into_raw_vec(), slice, tol = 0.0);
+        let y_f64: Vec<f64> = y.iter().copied().map(f64::from).collect();
+        let y_ref_f64: Vec<f64> = y_ref.iter().copied().map(f64::from).collect();
+        assert_close!(&y_f64, &y_ref_f64, slice, tol = 0.0);
     }
 }
