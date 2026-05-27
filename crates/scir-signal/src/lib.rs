@@ -32,11 +32,7 @@ pub use scir_iir_filters::sos::{Sos, SosCoeffs};
 /// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
 /// let _y = scir_signal::sosfilt(&sos, &x);
 /// ```
-pub fn butter_filter(
-    order: u32,
-    filter_type: FilterType,
-    fs: f64,
-) -> Result<Sos, FilterError> {
+pub fn butter_filter(order: u32, filter_type: FilterType, fs: f64) -> Result<Sos, FilterError> {
     let zpk = design_butter(order, filter_type, fs)?;
     zpk2sos(&zpk, None)
 }
@@ -113,11 +109,7 @@ pub fn cheby1(order: u32, ripple: f64, cutoff: f64) -> Sos {
 /// let x = ndarray::Array1::from_vec(vec![0.0; 8]);
 /// let _y = scir_signal::sosfilt(&sos, &x);
 /// ```
-pub fn bessel_filter(
-    order: u32,
-    filter_type: FilterType,
-    fs: f64,
-) -> Result<Sos, FilterError> {
+pub fn bessel_filter(order: u32, filter_type: FilterType, fs: f64) -> Result<Sos, FilterError> {
     let zpk = design_bessel(order, filter_type, fs)?;
     zpk2sos(&zpk, None)
 }
@@ -537,8 +529,8 @@ mod tests {
         // bessel_filter (default phase) and bessel_filter_with_norm(Phase)
         // MUST produce byte-identical SOS for the same parameters.
         let a = bessel_filter(4, FilterType::HighPass(0.3), 2.0).unwrap();
-        let b = bessel_filter_with_norm(4, BesselNorm::Phase, FilterType::HighPass(0.3), 2.0)
-            .unwrap();
+        let b =
+            bessel_filter_with_norm(4, BesselNorm::Phase, FilterType::HighPass(0.3), 2.0).unwrap();
         let arr_a = a.sections();
         let arr_b = b.sections();
         assert_eq!(arr_a.len(), arr_b.len());

@@ -1,6 +1,6 @@
 [package]
 name = "scir-iir-filters"
-version = "0.1.6"
+version = "0.1.7"
 authors = [
     "https://github.com/annoybot",
     "Softoboros Technology Inc.",

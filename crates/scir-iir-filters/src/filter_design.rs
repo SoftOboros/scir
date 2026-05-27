@@ -157,7 +157,12 @@ fn butter_internal(N: u32, filter_type: FilterType, fs: Option<f64>) -> Result<Z
 ///  }
 /// ```
 pub fn bessel(N: u32, filter_type: FilterType, fs: f64) -> Result<ZPKCoeffs, Error> {
-    iirfilter(N, filter_type, FilterAlgorithm::Bessel(BesselNorm::Phase), Some(fs))
+    iirfilter(
+        N,
+        filter_type,
+        FilterAlgorithm::Bessel(BesselNorm::Phase),
+        Some(fs),
+    )
 }
 
 /// Designs an Nth-order Bessel filter with explicit normalization choice.
@@ -354,7 +359,10 @@ fn besselap(N: u32, norm: BesselNorm) -> Result<ZPKCoeffs, Error> {
             crate::bessel_tables::BESSEL_AP_MAG_POLES_GAINS[idx],
         ),
     };
-    let poles: Vec<Complex64> = row.iter().map(|(re, im)| Complex64::new(*re, *im)).collect();
+    let poles: Vec<Complex64> = row
+        .iter()
+        .map(|(re, im)| Complex64::new(*re, *im))
+        .collect();
     Ok(ZPKCoeffs {
         z: vec![],
         p: poles,
@@ -691,7 +699,12 @@ mod tests {
         assert!(zpk.p.is_empty());
         // 10^(-1.0/20) ≈ 0.891250938...
         let expected = 10.0_f64.powf(-1.0 / 20.0);
-        assert!((zpk.k - expected).abs() < 1E-12, "k={}, expected={}", zpk.k, expected);
+        assert!(
+            (zpk.k - expected).abs() < 1E-12,
+            "k={}, expected={}",
+            zpk.k,
+            expected
+        );
     }
 
     #[test]
@@ -720,7 +733,11 @@ mod tests {
         }
         // Conjugate pairs: imaginary parts come as ±x pairs (sum to 0).
         let im_sum: f64 = zpk.p.iter().map(|p| p.im).sum();
-        assert!(im_sum.abs() < 1E-12, "imaginary parts not conjugate-symmetric: sum={}", im_sum);
+        assert!(
+            im_sum.abs() < 1E-12,
+            "imaginary parts not conjugate-symmetric: sum={}",
+            im_sum
+        );
     }
 
     #[test]

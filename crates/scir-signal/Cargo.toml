@@ -1,6 +1,6 @@
 [package]
 name = "scir-signal"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 license = "MIT"
 description = "SciR Signal: Butterworth, Chebyshev I, and Bessel (phase norm, orders 1..=25) design across all FilterTypes (LPF/HPF/BPF/BSF), sosfilt/filtfilt, and resample_poly with fixture-driven parity to SciPy. Optional GPU-forwarded FIR."

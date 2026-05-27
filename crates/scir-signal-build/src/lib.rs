@@ -231,12 +231,7 @@ impl Emitter {
     /// `length == 1` queues `[1.0]` (degenerate but well-defined).
     /// Closed-form math per [`scir_signal::window`] — see the per-shape
     /// docs on [`WindowShape`].
-    pub fn add_window(
-        &mut self,
-        ident: &str,
-        shape: WindowShape,
-        length: usize,
-    ) -> &mut Self {
+    pub fn add_window(&mut self, ident: &str, shape: WindowShape, length: usize) -> &mut Self {
         let samples = scir_signal::window::window(shape, length);
         let doc = match shape {
             WindowShape::Hann => format!("hann(length={length})"),
@@ -404,9 +399,11 @@ mod tests {
     #[test]
     fn render_is_byte_deterministic() {
         let mut e1 = Emitter::new().header("test header");
-        e1.add_butter("FOO", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        e1.add_butter("FOO", 4, FilterType::LowPass(0.2), 2.0)
+            .unwrap();
         let mut e2 = Emitter::new().header("test header");
-        e2.add_butter("FOO", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        e2.add_butter("FOO", 4, FilterType::LowPass(0.2), 2.0)
+            .unwrap();
         assert_eq!(e1.render(), e2.render());
     }
 
@@ -415,12 +412,16 @@ mod tests {
         // Two distinct items with different idents: two separate emitters
         // produce identical output as long as the queued sequence matches.
         let mut e1 = Emitter::new();
-        e1.add_butter("A", 2, FilterType::LowPass(0.1), 2.0).unwrap();
-        e1.add_butter("B", 2, FilterType::HighPass(0.4), 2.0).unwrap();
+        e1.add_butter("A", 2, FilterType::LowPass(0.1), 2.0)
+            .unwrap();
+        e1.add_butter("B", 2, FilterType::HighPass(0.4), 2.0)
+            .unwrap();
 
         let mut e2 = Emitter::new();
-        e2.add_butter("A", 2, FilterType::LowPass(0.1), 2.0).unwrap();
-        e2.add_butter("B", 2, FilterType::HighPass(0.4), 2.0).unwrap();
+        e2.add_butter("A", 2, FilterType::LowPass(0.1), 2.0)
+            .unwrap();
+        e2.add_butter("B", 2, FilterType::HighPass(0.4), 2.0)
+            .unwrap();
 
         assert_eq!(e1.render(), e2.render());
     }
@@ -523,7 +524,9 @@ mod tests {
         assert_eq!(parsed.len(), 1, "iirnotch is always a single biquad");
         let parsed_sos = scir_signal::Sos::from_vec(parsed);
         let x = Array1::from(
-            (0..128).map(|i| (i as f64 * 0.05).sin()).collect::<Vec<_>>(),
+            (0..128)
+                .map(|i| (i as f64 * 0.05).sin())
+                .collect::<Vec<_>>(),
         );
         let direct_y = sosfilt(&direct, &x);
         let parsed_y = sosfilt(&parsed_sos, &x);
@@ -542,8 +545,8 @@ mod tests {
         e.add_bessel_with_norm("LPF_DELAY", order, BesselNorm::Delay, kind, fs)
             .unwrap();
 
-        let direct = scir_signal::bessel_filter_with_norm(order, BesselNorm::Delay, kind, fs)
-            .unwrap();
+        let direct =
+            scir_signal::bessel_filter_with_norm(order, BesselNorm::Delay, kind, fs).unwrap();
 
         let body = e.render();
         let parsed = parse_first_static_table(&body, "LPF_DELAY", 6);
@@ -586,8 +589,10 @@ mod tests {
     fn multi_item_emitter_emits_all_tables() {
         let mut e = Emitter::new();
         e.add_butter("A", 2, FilterType::LowPass(0.1), 2.0).unwrap();
-        e.add_butter("B", 4, FilterType::HighPass(0.3), 2.0).unwrap();
-        e.add_cheby1("C", 4, 1.0, FilterType::LowPass(0.2), 2.0).unwrap();
+        e.add_butter("B", 4, FilterType::HighPass(0.3), 2.0)
+            .unwrap();
+        e.add_cheby1("C", 4, 1.0, FilterType::LowPass(0.2), 2.0)
+            .unwrap();
         let body = e.render();
         for ident in ["A", "B", "C"] {
             assert!(
@@ -603,8 +608,10 @@ mod tests {
     #[test]
     fn as_f32_emits_truncated_f32_table_for_last_item() {
         let mut e = Emitter::new();
-        e.add_butter("F64_TBL", 2, FilterType::LowPass(0.1), 2.0).unwrap();
-        e.add_butter("F32_TBL", 2, FilterType::HighPass(0.3), 2.0).unwrap();
+        e.add_butter("F64_TBL", 2, FilterType::LowPass(0.1), 2.0)
+            .unwrap();
+        e.add_butter("F32_TBL", 2, FilterType::HighPass(0.3), 2.0)
+            .unwrap();
         e.as_f32();
         let body = e.render();
         assert!(body.contains("pub static F64_TBL: [[f64; 6]; 1]"));
@@ -722,9 +729,11 @@ mod tests {
     #[test]
     fn mixed_biquad_and_window_emit_in_order() {
         let mut e = Emitter::new();
-        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0)
+            .unwrap();
         e.add_window("WIN", WindowShape::Hann, 16);
-        e.add_butter("HPF", 4, FilterType::HighPass(0.4), 2.0).unwrap();
+        e.add_butter("HPF", 4, FilterType::HighPass(0.4), 2.0)
+            .unwrap();
         let body = e.render();
         // All three idents present.
         assert!(body.contains("pub static LPF: [[f64; 6];"));
@@ -741,7 +750,8 @@ mod tests {
     #[test]
     fn window_as_f32_does_not_affect_prior_biquad_item() {
         let mut e = Emitter::new();
-        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0)
+            .unwrap();
         // No as_f32 between biquad and window — biquad stays f64.
         e.add_window("WIN", WindowShape::Hann, 8);
         e.as_f32();
@@ -843,7 +853,8 @@ mod tests {
     #[test]
     fn mixed_biquad_window_and_bin_labels_emit_in_order() {
         let mut e = Emitter::new();
-        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0).unwrap();
+        e.add_butter("LPF", 4, FilterType::LowPass(0.2), 2.0)
+            .unwrap();
         e.add_window("WIN", WindowShape::Hann, 16);
         e.add_fft_bin_labels("BIN", 16, 48_000.0, FftLayout::OneSidedReal);
         let body = e.render();
@@ -887,7 +898,10 @@ mod tests {
     /// Extract the f64 literals from the first `pub static IDENT: ...` block
     /// in `body`, returning each section as a `[f64; 6]`.
     fn parse_first_static_table(body: &str, ident: &str, cols: usize) -> Vec<[f64; 6]> {
-        assert_eq!(cols, 6, "this test parser only handles 6-column biquad rows");
+        assert_eq!(
+            cols, 6,
+            "this test parser only handles 6-column biquad rows"
+        );
         let needle = format!("pub static {ident}:");
         let start = body.find(&needle).expect("ident not found");
         let after = &body[start..];
@@ -912,7 +926,12 @@ mod tests {
                     t.parse::<f64>().expect("number parse")
                 })
                 .collect();
-            assert_eq!(nums.len(), 6, "expected 6 columns, got {} on `{line}`", nums.len());
+            assert_eq!(
+                nums.len(),
+                6,
+                "expected 6 columns, got {} on `{line}`",
+                nums.len()
+            );
             sections.push([nums[0], nums[1], nums[2], nums[3], nums[4], nums[5]]);
         }
         sections

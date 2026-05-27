@@ -77,8 +77,7 @@ pub fn window(shape: WindowShape, length: usize) -> Vec<f64> {
                     let a1 = 0.48829;
                     let a2 = 0.14128;
                     let a3 = 0.01168;
-                    a0 - a1 * (2.0 * PI * t).cos()
-                        + a2 * (4.0 * PI * t).cos()
+                    a0 - a1 * (2.0 * PI * t).cos() + a2 * (4.0 * PI * t).cos()
                         - a3 * (6.0 * PI * t).cos()
                 }
                 WindowShape::FlatTop => {
@@ -163,7 +162,11 @@ mod tests {
         let w = window(WindowShape::FlatTop, 1025);
         let expected = 0.21557895 - (-0.41663158) + 0.27726316 - (-0.083578947) + 0.006947368;
         assert!((w[512] - expected).abs() < 1e-12);
-        assert!((w[512] - 1.0).abs() < 1e-6, "flat-top peak should be ~1.0, got {}", w[512]);
+        assert!(
+            (w[512] - 1.0).abs() < 1e-6,
+            "flat-top peak should be ~1.0, got {}",
+            w[512]
+        );
     }
 
     #[test]
