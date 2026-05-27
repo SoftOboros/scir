@@ -955,7 +955,9 @@ L_DONE:
 }
 
 #[cfg(feature = "cuda")]
-pub use cuda::{add_scalar_f32_cuda, add_vec_f32_cuda, fir1d_batched_f32_cuda, mul_scalar_f32_cuda};
+pub use cuda::{
+    add_scalar_f32_cuda, add_vec_f32_cuda, fir1d_batched_f32_cuda, mul_scalar_f32_cuda,
+};
 
 /// Causal FIR over each row of `x` using `taps` (CPU baseline, f32).
 ///
