@@ -33,6 +33,8 @@ Tracks upstream `iir_filters@0.1.x` lineage but versions independently under Sci
 - `0.1.4` shipped with SciR `v0.3.3` (initial fork — public Sos accessors).
 - `0.1.5` shipped with SciR `v0.3.4` (added `cheb1ap` + `cheby1` design path, all four FilterTypes for both prototypes).
 - `0.1.6` shipped with SciR `v0.3.4` (added `no_std + alloc` support via the `std` default-feature; `FilterType` derives `Clone, Copy`; added `besselap` + `bessel` via SciPy/mpmath-precomputed phase-norm pole tables for orders 1..=25).
+- `0.1.7` shipped with SciR `v0.3.5` (added `BesselNorm::{Phase, Delay, Mag}` and
+  per-order precomputed pole + gain tables for `Delay` and `Mag` normalization options).
 
 ## License
 
