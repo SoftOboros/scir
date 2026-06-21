@@ -19,16 +19,16 @@ gpu = ["scir-gpu/cuda", "scir-signal/gpu"]
 gpu-all = ["gpu"]
 
 [dependencies]
-scir-core = { version = "0.3.0", path = "../scir-core" }
-scir-nd = { version = "0.3.0", path = "../scir-nd" }
-scir-fft = { version = "0.3.0", path = "../scir-fft" }
-scir-signal = { version = "0.3.0", path = "../scir-signal", default-features = false, features = [] }
-scir-gpu = { version = "0.3.0", path = "../scir-gpu", default-features = false, features = [] }
+scir-core = { version = "0.3.2", path = "../scir-core" }
+scir-nd = { version = "0.3.2", path = "../scir-nd" }
+scir-fft = { version = "0.3.5", path = "../scir-fft" }
+scir-signal = { version = "0.3.5", path = "../scir-signal", default-features = false, features = [] }
+scir-gpu = { version = "0.3.2", path = "../scir-gpu", default-features = false, features = [] }
 ndarray = "0.15"
 
 [lib]
 path = "src/lib.rs"
 
 [dev-dependencies]
-scir-gpu = { version = "0.3.0", path = "../scir-gpu" }
+scir-gpu = { version = "0.3.2", path = "../scir-gpu" }
 rand = "0.8"
