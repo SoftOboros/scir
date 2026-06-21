@@ -4,7 +4,7 @@
 >
 > **2026-06-21 SPICK-23 kernel lane:** `scir-fft::vision` now owns the first reusable 2D spectral image kernel slice for Spectral-Pick's invariant vision key work: 2D FFT magnitude, centered frequency layout, Hann windowing, log-polar resampling, Fourier-Mellin magnitude, and bin-level rotation/scale pose estimates. Stream/time wrappers remain Streamz-owned; Spectral-Pick and Apple applications are content producers/consumers of these kernels, not owners of the DSP math.
 >
-> **2026-06-21 v0.3.5 publish lane:** `release/v0.3.5` is the semver branch for publishing the vision-kernel work. Publish `scir-fft 0.3.5` first; the umbrella `scir 0.3.5` now depends on that version and can only package/publish after `scir-fft 0.3.5` is present in the registry.
+> **2026-06-21 v0.3.5 publish lane:** `release/v0.3.5` is the semver branch for publishing the vision-kernel work. Publish dependency crates before dependents: `scir-iir-filters 0.1.7` and `scir-fft 0.3.5` must be present in the registry before `scir-signal 0.3.5` and the umbrella `scir 0.3.5` can package/publish.
 
 ## 0) Upstream Reference & Constraints (Source of Truth)
 - **Upstream project:** SciPy — GitHub: `scipy/scipy`.

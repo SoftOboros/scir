@@ -13,7 +13,7 @@ categories = ["science","mathematics"]
 
 [dependencies]
 ndarray = "0.15"
-scir-core = { path = "../scir-core" }
+scir-core = { version = "0.3.2", path = "../scir-core" }
 
 [dev-dependencies]
 ndarray-npy = "0.8"

@@ -15,9 +15,9 @@ categories = ["science","mathematics"]
 ndarray = "0.15"
 # SciR fork of upstream iir_filters@0.1.3 with public Sos accessors. See
 # crates/scir-iir-filters/README.md for the rationale.
-scir-iir-filters = { path = "../scir-iir-filters" }
-scir-core = { path = "../scir-core" }
-scir-gpu = { path = "../scir-gpu", optional = true }
+scir-iir-filters = { version = "0.1.7", path = "../scir-iir-filters" }
+scir-core = { version = "0.3.2", path = "../scir-core" }
+scir-gpu = { version = "0.3.2", path = "../scir-gpu", optional = true }
 
 [features]
 gpu = ["scir-gpu"]

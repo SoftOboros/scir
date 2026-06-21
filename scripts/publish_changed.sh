@@ -9,9 +9,10 @@ crates=(
   scir-core
   scir-nd
   scir-fft
+  scir-iir-filters
+  scir-gpu
   scir-signal
   scir-optimize
-  scir-gpu
   scir # umbrella last
 )
 
@@ -42,6 +43,18 @@ exists_on_crates_io() {
     return $?
   fi
   # If curl is unavailable, err on the side of publishing
+  return 1
+}
+
+wait_for_crates_io() {
+  local name="$1"; local ver="$2"
+  local attempt
+  for attempt in {1..18}; do
+    if exists_on_crates_io "$name" "$ver"; then
+      return 0
+    fi
+    sleep 5
+  done
   return 1
 }
 
@@ -85,9 +98,17 @@ for crate in "${to_publish[@]}"; do
     echo "::endgroup::"
     continue
   fi
-  # Try publish; allow failures to be bypassed with a message
-  if ! cargo publish -p "$crate" --token "${CARGO_REGISTRY_TOKEN:-}" --no-verify; then
-    echo "⚠️ publish $crate failed (likely due to path dependencies or prior version). Skipping."
+  crate_version=$(get_version "crates/${crate}/Cargo.toml")
+  # Try publish; allow prior-version failures to be bypassed with a message.
+  # Cargo reads CARGO_REGISTRY_TOKEN from the environment.
+  if cargo publish -p "$crate" --no-verify; then
+    if ! wait_for_crates_io "$crate" "$crate_version"; then
+      echo "⚠️ published $crate $crate_version, but crates.io did not show it before timeout."
+    fi
+  elif exists_on_crates_io "$crate" "$crate_version"; then
+    echo "$crate $crate_version is already present on crates.io."
+  else
+    echo "⚠️ publish $crate failed (likely due to path dependencies, registry/network issues, or prior version). Skipping."
   fi
   echo "::endgroup::"
 done
