@@ -1,9 +1,9 @@
 [package]
 name = "scir-fft"
-version = "0.3.2"
+version = "0.3.5"
 edition = "2021"
 license = "MIT"
-description = "SciR FFT: parity-first FFT/RFFT/IRFFT with fixture-based testing and rustfft/realfft backends."
+description = "SciR FFT: parity-first FFT/RFFT/IRFFT plus reusable 2D vision spectral kernels."
 repository = "https://github.com/SoftOboros/scir"
 homepage = "https://github.com/SoftOboros/scir"
 documentation = "https://docs.rs/scir-fft"
@@ -19,5 +19,5 @@ realfft = "3"
 
 [dev-dependencies]
 ndarray-npy = "0.8"
-scir-core = { path = "../scir-core" }
+scir-core = { version = "0.3.2", path = "../scir-core" }
 criterion = "0.5"

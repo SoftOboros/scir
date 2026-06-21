@@ -1,9 +1,11 @@
 [workspace]
 members = [
     "crates/scir-core",
+    "crates/scir-iir-filters",
     "crates/scir-nd",
     "crates/scir-fft",
     "crates/scir-signal",
+    "crates/scir-signal-build",
     "crates/scir-optimize",
     "crates/scir-gpu",
     "crates/scir",
@@ -15,9 +17,11 @@ exclude = [
 
 [patch.crates-io]
 scir-core = { path = "crates/scir-core" }
+scir-iir-filters = { path = "crates/scir-iir-filters" }
 scir-nd = { path = "crates/scir-nd" }
 scir-fft = { path = "crates/scir-fft" }
 scir-signal = { path = "crates/scir-signal" }
+scir-signal-build = { path = "crates/scir-signal-build" }
 scir-optimize = { path = "crates/scir-optimize" }
 scir-gpu = { path = "crates/scir-gpu" }
 scir = { path = "crates/scir" }

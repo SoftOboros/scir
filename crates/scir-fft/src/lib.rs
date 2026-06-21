@@ -6,6 +6,9 @@ use num_complex::Complex64;
 use realfft::RealFftPlanner;
 use rustfft::FftPlanner;
 
+/// Vision-oriented 2D spectral kernels.
+pub mod vision;
+
 /// Compute the forward FFT of a real-valued array.
 ///
 /// # Examples

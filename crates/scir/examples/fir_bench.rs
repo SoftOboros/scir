@@ -72,6 +72,6 @@ fn main() {
         println!("CUDA FIR (or CPU fallback): {:?}", dt_gpu);
 
         // Sanity: shapes must match
-        assert_eq!(y_cpu.dim(), y_gpu.dim());
+        assert_eq!(_y_cpu.dim(), y_gpu.dim());
     }
 }

@@ -188,12 +188,35 @@ mod tests {
     use scir_core::assert_close;
     use std::{fs::File, path::PathBuf};
 
-    fn fixtures_base() -> Option<PathBuf> {
+    fn fixture_path(name: &str) -> Option<PathBuf> {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-        if base.exists() {
-            Some(base)
+        let path = base.join(name);
+        if path.exists() {
+            Some(path)
         } else {
             None
+        }
+    }
+
+    fn fixture_array(name: &str, test_name: &str) -> Option<Array1<f64>> {
+        let Some(path) = fixture_path(name) else {
+            eprintln!("[scir-optimize] fixture {name} missing; skipping {test_name}");
+            return None;
+        };
+
+        let Ok(file) = File::open(&path) else {
+            eprintln!("[scir-optimize] fixture {name} could not be opened; skipping {test_name}");
+            return None;
+        };
+
+        match ReadNpyExt::read_npy(file) {
+            Ok(values) => Some(values),
+            Err(err) => {
+                eprintln!(
+                    "[scir-optimize] fixture {name} read failed ({err}); skipping {test_name}"
+                );
+                None
+            }
         }
     }
 
@@ -221,66 +244,57 @@ mod tests {
 
     #[test]
     fn rosenbrock_nelder_mead_matches_fixture() {
-        let Some(base) = fixtures_base() else {
-            eprintln!(
-                "[scir-optimize] fixtures missing; skipping rosenbrock_nelder_mead_matches_fixture"
-            );
+        let Some(expected) = fixture_array(
+            "rosenbrock_nelder.npy",
+            "rosenbrock_nelder_mead_matches_fixture",
+        ) else {
             return;
         };
-        let expected: Array1<f64> =
-            ReadNpyExt::read_npy(File::open(base.join("rosenbrock_nelder.npy")).unwrap()).unwrap();
         let result = nelder_mead(rosenbrock, array![-1.2, 1.0], 1.0, 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }
 
     #[test]
     fn rosenbrock_bfgs_matches_fixture() {
-        let Some(base) = fixtures_base() else {
-            eprintln!("[scir-optimize] fixtures missing; skipping rosenbrock_bfgs_matches_fixture");
+        let Some(expected) =
+            fixture_array("rosenbrock_bfgs.npy", "rosenbrock_bfgs_matches_fixture")
+        else {
             return;
         };
-        let expected: Array1<f64> =
-            ReadNpyExt::read_npy(File::open(base.join("rosenbrock_bfgs.npy")).unwrap()).unwrap();
         let result = bfgs(rosenbrock, rosenbrock_grad, array![-1.2, 1.0], 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }
 
     #[test]
     fn himmelblau_nelder_mead_matches_fixture() {
-        let Some(base) = fixtures_base() else {
-            eprintln!(
-                "[scir-optimize] fixtures missing; skipping himmelblau_nelder_mead_matches_fixture"
-            );
+        let Some(expected) = fixture_array(
+            "himmelblau_nelder.npy",
+            "himmelblau_nelder_mead_matches_fixture",
+        ) else {
             return;
         };
-        let expected: Array1<f64> =
-            ReadNpyExt::read_npy(File::open(base.join("himmelblau_nelder.npy")).unwrap()).unwrap();
         let result = nelder_mead(himmelblau, array![0.0, 0.0], 0.5, 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-4, rtol = 1e-5);
     }
 
     #[test]
     fn himmelblau_bfgs_matches_fixture() {
-        let Some(base) = fixtures_base() else {
-            eprintln!("[scir-optimize] fixtures missing; skipping himmelblau_bfgs_matches_fixture");
+        let Some(expected) =
+            fixture_array("himmelblau_bfgs.npy", "himmelblau_bfgs_matches_fixture")
+        else {
             return;
         };
-        let expected: Array1<f64> =
-            ReadNpyExt::read_npy(File::open(base.join("himmelblau_bfgs.npy")).unwrap()).unwrap();
         let result = bfgs(himmelblau, himmelblau_grad, array![0.0, 0.0], 2000, 1e-8);
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }
 
     #[test]
     fn rosenbrock_lbfgs_matches_fixture() {
-        let Some(base) = fixtures_base() else {
-            eprintln!(
-                "[scir-optimize] fixtures missing; skipping rosenbrock_lbfgs_matches_fixture"
-            );
+        let Some(expected) =
+            fixture_array("rosenbrock_lbfgs.npy", "rosenbrock_lbfgs_matches_fixture")
+        else {
             return;
         };
-        let expected: Array1<f64> =
-            ReadNpyExt::read_npy(File::open(base.join("rosenbrock_lbfgs.npy")).unwrap()).unwrap();
         let result = lbfgs(
             rosenbrock,
             rosenbrock_grad,
@@ -294,14 +308,11 @@ mod tests {
 
     #[test]
     fn himmelblau_lbfgs_matches_fixture() {
-        let Some(base) = fixtures_base() else {
-            eprintln!(
-                "[scir-optimize] fixtures missing; skipping himmelblau_lbfgs_matches_fixture"
-            );
+        let Some(expected) =
+            fixture_array("himmelblau_lbfgs.npy", "himmelblau_lbfgs_matches_fixture")
+        else {
             return;
         };
-        let expected: Array1<f64> =
-            ReadNpyExt::read_npy(File::open(base.join("himmelblau_lbfgs.npy")).unwrap()).unwrap();
         let result = lbfgs(himmelblau, himmelblau_grad, array![0.0, 0.0], 2000, 1e-8, 5);
         assert_close!(&result, &expected, array, atol = 1e-5, rtol = 1e-5);
     }

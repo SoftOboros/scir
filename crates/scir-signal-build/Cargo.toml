@@ -1,0 +1,19 @@
+[package]
+name = "scir-signal-build"
+version = "0.0.4"
+edition = "2021"
+license = "MIT"
+description = "SciR Signal build helper: emit Rust source files containing SciPy-parity biquad coefficient tables, STFT window amplitude tables, and FFT bin label tables for static-overlay / no_std consumers."
+repository = "https://github.com/SoftOboros/scir"
+homepage = "https://github.com/SoftOboros/scir"
+documentation = "https://docs.rs/scir-signal-build"
+readme = "README.md"
+keywords = ["scir", "signal", "filter", "build", "no-std"]
+categories = ["science", "mathematics", "development-tools::build-utils"]
+
+[dependencies]
+scir-signal = { version = "0.3.5", path = "../scir-signal" }
+
+[dev-dependencies]
+ndarray = "0.15"
+tempfile = "3"
