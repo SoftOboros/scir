@@ -1,6 +1,8 @@
 # SciR (SciPy in Rust) — Development Blueprint (Reviewed & Extended)
 
 > **Status:** Reviewed for consistency with the thread; hallucinations corrected; clarified where thin; CI + phase checklists added.
+>
+> **2026-06-21 SPICK-23 kernel lane:** `scir-fft::vision` now owns the first reusable 2D spectral image kernel slice for Spectral-Pick's invariant vision key work: 2D FFT magnitude, centered frequency layout, Hann windowing, log-polar resampling, Fourier-Mellin magnitude, and bin-level rotation/scale pose estimates. Stream/time wrappers remain Streamz-owned; Spectral-Pick and Apple applications are content producers/consumers of these kernels, not owners of the DSP math.
 
 ## 0) Upstream Reference & Constraints (Source of Truth)
 - **Upstream project:** SciPy — GitHub: `scipy/scipy`.
