@@ -113,9 +113,9 @@ assert_close!(y, y_ref, atol=1e-9, rtol=1e-7);
 **Reality check:** GitHub‑hosted runners generally do **not** expose GPUs. GPU CI requires **self‑hosted** runners or third‑party CI with GPU. Our plan reflects that.
 
 ### 6.1 Backend Strategy
-- **CUDA (NVIDIA):** Use `cudarc` (if sufficient for our needs) or implement minimal FFI to cuBLAS/cuFFT if maintained crates are unavailable. We will not claim an existing crate until verified; plan for FFI via `bindgen` as fallback.
-- **Portable compute:** `wgpu` (Vulkan/Metal/DX12/WebGPU) with WGSL compute kernels. FFT on `wgpu` is non‑trivial; start with pointwise ops, convolutions, GEMM; explore radix‑N FFT kernels as a later milestone.
-- **OpenCL:** `ocl` or `opencl3` as an alternative where CUDA is not available.
+- **CUDA (NVIDIA):** Implemented via minimal FFI (Driver API + embedded PTX), not `cudarc` — kept dependency-free per §10.5. Elementwise add/mul and batched FIR are real (`crates/scir-gpu/src/lib.rs`, `cuda` feature).
+- **Portable compute:** `wgpu` (Vulkan/Metal/DX12/WebGPU) with WGSL compute kernels — **implemented** as of the wgpu-backend milestone below (`crates/scir-gpu/src/wgpu_backend.rs`, `wgpu` feature). Unlike CUDA, this pulls in real crate dependencies (`wgpu`, `pollster`, `bytemuck`), gated behind the feature so non-GPU builds are unaffected. FFT on `wgpu` is still non‑trivial and not started; elementwise add and 2D image resize (`resize2d`) are done — see §6.3 item 5.
+- **OpenCL:** `ocl` or `opencl3` as an alternative where CUDA is not available. Not started.
 
 ### 6.2 Device Array Abstraction
 Instead of storing raw `wgpu::Buffer` in a generic enum, we define **shaped device arrays** with dtype and strides to mirror CPU semantics:
@@ -142,6 +142,7 @@ pub struct DArray {
 2) **Convolution / FIR** (1D/2D): batched FIR via tiling; later IIR (with feedback) using parallel prefix or block processing.
 3) **GEMM**: leverage cuBLAS (CUDA) or tuned WGSL kernels.
 4) **FFT**: CUDA path first (via cuFFT FFI); `wgpu` FFT later (requires custom kernels).
+5) **2D image resize** (`resize2d`, nearest/bilinear): added as a `wgpu`-first target ahead of GEMM/FFT in this list's original order, motivated by the sibling `softoboros` repo's streamz `video-gpu` (VG) initiative — see `docs/todo/streamz/video-gpu/TODO-VG-00-CONCEPTS.md` there. No CUDA kernel yet (tracked as a known gap, not silently dropped).
 
 ### 6.4 Validation
 - Always verify **GPU == CPU** within tolerances.
@@ -392,12 +393,13 @@ jobs:
 ### Phase 4 — GPU Foundations
 - [x] `scir-gpu` device array abstraction + transfers (CPU-backed, feature-gated CUDA stub).
 - [x] CUDA elementwise + batched FIR with parity vs CPU (PTX kernels + driver FFI; tests skip if no CUDA).
-- [ ] Self‑hosted GPU CI job green; docs for runner setup.
+- [x] wgpu backend: device/adapter init (`wgpu_backend::WgpuCtx`), elementwise add + `resize2d` (nearest/bilinear) WGSL kernels, parity vs CPU within tolerance. Verified on real hardware (AMD Radeon 8050S Graphics, Vulkan backend) — not just CI/simulated.
+- [ ] Self‑hosted GPU CI job green; docs for runner setup. (CUDA path only so far; wgpu CI runner not set up — native Vulkan/DX12 needs no vendor SDK but still needs a GPU-capable runner.)
 
 ### Phase 5 — GPU FFT & GEMM
 - [ ] cuFFT FFI path wired for 1D FFT; parity vs CPU fixtures.
 - [ ] GEMM via cuBLAS (CUDA) or WGSL kernels; linalg integration.
-- [ ] Cross‑backend tests (CPU↔CUDA↔WGPU) within tolerances.
+- [ ] Cross‑backend tests (CPU↔CUDA↔WGPU) within tolerances. (CPU↔WGPU done for elementwise add and resize2d; CUDA↔WGPU still open since resize2d has no CUDA kernel yet.)
 
 ### Phase 6 — Optimization & Docs
 - [ ] SIMD paths (wide or equivalent) for hot loops.
@@ -463,3 +465,5 @@ jobs:
 - Added `crates/scir/examples/fir_bench.rs` for simple CPU vs CUDA timing using `Instant` (no extra deps). Aggregated feature alias `gpu-all` added in umbrella crate.
  
  - Fixed `scir-signal` doctest compile errors by removing access to private `Sos` internals in examples; updated examples to validate via `sosfilt`. Ran `cargo fmt` and verified doctests pass.
+
+- Implemented the `wgpu` backend in `scir-gpu` (feature `wgpu`, deps `wgpu`/`pollster`/`bytemuck`): `wgpu_backend::WgpuCtx` (per-call device/queue init, mirroring `cuda::CudaCtx`'s creation style), `Device::Wgpu` variant, WGSL kernels for elementwise add (parity baseline vs. the existing CUDA `add_vec_f32`) and `resize2d` (nearest/bilinear 2D image resize — new `DeviceArray<f32>::resize2d_f32`/`resize2d_auto`, `ResizeMode` enum). Refactored `to_device`/`add_scalar_auto`/`add_auto`/`mul_scalar_auto` to per-match-arm `#[cfg]` instead of whole-function duplication, so they stay exhaustive under any `cuda`/`wgpu` feature combination. Motivated by the sibling `softoboros` repo's streamz `video-gpu` (VG) initiative (`docs/todo/streamz/video-gpu/TODO-VG-00-CONCEPTS.md` there) needing a GPU resize op testable on non-NVIDIA hardware. Verified with `cargo test -p scir-gpu --features wgpu` on real hardware (AMD Radeon 8050S Graphics, Vulkan backend) — both elementwise-add and resize2d (nearest + bilinear) GPU-vs-CPU parity tests pass. `cargo fmt --all` applied; default and `cuda`-feature builds re-verified unaffected (the `cuda` feature's own link step still requires an NVIDIA CUDA install, unrelated to this change).

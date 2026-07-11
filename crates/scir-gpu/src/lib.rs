@@ -6,6 +6,12 @@ use num_traits::NumAssign;
 use std::error::Error;
 use std::fmt;
 
+#[cfg(feature = "wgpu")]
+mod wgpu_backend;
+
+#[cfg(feature = "wgpu")]
+pub use wgpu_backend::adapter_name as wgpu_adapter_name;
+
 /// Supported data types for device arrays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DType {
@@ -23,6 +29,28 @@ pub enum Device {
     #[cfg(feature = "cuda")]
     /// NVIDIA CUDA device (feature `cuda`)
     Cuda,
+    #[cfg(feature = "wgpu")]
+    /// Portable compute device via wgpu (Vulkan/Metal/DX12, feature `wgpu`)
+    Wgpu,
+}
+
+/// Resize interpolation mode for [`DeviceArray::resize2d_auto`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResizeMode {
+    /// Nearest-neighbor sampling.
+    Nearest,
+    /// Bilinear interpolation.
+    Bilinear,
+}
+
+impl ResizeMode {
+    #[cfg(feature = "wgpu")]
+    fn as_wgsl_mode(self) -> u32 {
+        match self {
+            ResizeMode::Nearest => 0,
+            ResizeMode::Bilinear => 1,
+        }
+    }
 }
 
 /// GPU-related error types.
@@ -125,8 +153,11 @@ impl<T: Copy> DeviceArray<T> {
 }
 
 impl<T: Copy> DeviceArray<T> {
-    #[cfg(feature = "cuda")]
-    /// Move the array to a device (CPU or CUDA if enabled).
+    /// Move the array to a device (CPU, or CUDA/wgpu when those features are enabled).
+    ///
+    /// Per-variant `#[cfg]` on match arms (rather than duplicating this whole
+    /// function per feature combination) keeps this exhaustive under any
+    /// subset of `cuda`/`wgpu` being enabled.
     ///
     /// # Examples
     /// ```
@@ -141,20 +172,17 @@ impl<T: Copy> DeviceArray<T> {
                 self.device = Device::Cpu;
                 Ok(())
             }
+            #[cfg(feature = "cuda")]
             Device::Cuda => {
                 // Placeholder: actual upload would allocate device memory and copy.
                 self.device = Device::Cuda;
                 Ok(())
             }
-        }
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    /// Move the array to a device (CPU only, when CUDA is disabled).
-    pub fn to_device(&mut self, device: Device) -> Result<(), GpuError> {
-        match device {
-            Device::Cpu => {
-                self.device = Device::Cpu;
+            #[cfg(feature = "wgpu")]
+            Device::Wgpu => {
+                // Dispatch functions below create their own wgpu buffers per
+                // call; this only tags the array, mirroring the CUDA placeholder.
+                self.device = Device::Wgpu;
                 Ok(())
             }
         }
@@ -238,28 +266,28 @@ impl DeviceArray<f32> {
     /// assert_eq!(out.to_cpu_vec(), vec![2.0f32, 3.0, 4.0]);
     /// ```
     pub fn add_scalar_auto(&self, alpha: f32) -> Self {
-        #[cfg(feature = "cuda")]
-        {
-            match self.device {
-                Device::Cpu => self.mul_scalar(1.0f32).add_scalar(alpha), // reuse CPU path
-                Device::Cuda => {
-                    let mut out = vec![0.0f32; self.host.len()];
-                    if crate::add_scalar_f32_cuda(&self.host, alpha, &mut out).is_err() {
-                        // Fallback to CPU on failure
-                        return self.mul_scalar(1.0f32).add_scalar(alpha);
-                    }
-                    DeviceArray {
-                        shape: self.shape.clone(),
-                        dtype: self.dtype,
-                        device: self.device,
-                        host: out,
-                    }
+        match self.device {
+            Device::Cpu => self.mul_scalar(1.0f32).add_scalar(alpha), // reuse CPU path
+            #[cfg(feature = "cuda")]
+            Device::Cuda => {
+                let mut out = vec![0.0f32; self.host.len()];
+                if crate::add_scalar_f32_cuda(&self.host, alpha, &mut out).is_err() {
+                    // Fallback to CPU on failure
+                    return self.mul_scalar(1.0f32).add_scalar(alpha);
+                }
+                DeviceArray {
+                    shape: self.shape.clone(),
+                    dtype: self.dtype,
+                    device: self.device,
+                    host: out,
                 }
             }
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            self.mul_scalar(1.0f32).add_scalar(alpha)
+            #[cfg(feature = "wgpu")]
+            Device::Wgpu => {
+                // No wgpu kernel for scalar-add this milestone (only elementwise
+                // add and resize2d are implemented); CPU fallback.
+                self.mul_scalar(1.0f32).add_scalar(alpha)
+            }
         }
     }
 
@@ -276,29 +304,42 @@ impl DeviceArray<f32> {
         if self.shape != other.shape {
             return Err(GpuError::ShapeMismatch);
         }
-        #[cfg(feature = "cuda")]
-        {
-            match (self.device, other.device) {
-                (Device::Cpu, Device::Cpu) => self.add(other),
-                (Device::Cuda, Device::Cuda) => {
-                    let mut out = vec![0.0f32; self.host.len()];
-                    if crate::add_vec_f32_cuda(&self.host, &other.host, &mut out).is_err() {
-                        // Fallback to CPU on failure
-                        return self.add(other);
-                    }
-                    Ok(DeviceArray {
-                        shape: self.shape.clone(),
-                        dtype: self.dtype,
-                        device: self.device,
-                        host: out,
-                    })
+        match (self.device, other.device) {
+            (Device::Cpu, Device::Cpu) => self.add(other),
+            #[cfg(feature = "cuda")]
+            (Device::Cuda, Device::Cuda) => {
+                let mut out = vec![0.0f32; self.host.len()];
+                if crate::add_vec_f32_cuda(&self.host, &other.host, &mut out).is_err() {
+                    // Fallback to CPU on failure
+                    return self.add(other);
                 }
-                _ => self.add(other),
+                Ok(DeviceArray {
+                    shape: self.shape.clone(),
+                    dtype: self.dtype,
+                    device: self.device,
+                    host: out,
+                })
             }
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            self.add(other)
+            #[cfg(feature = "wgpu")]
+            (Device::Wgpu, Device::Wgpu) => {
+                let mut out = vec![0.0f32; self.host.len()];
+                if crate::wgpu_backend::add_vec_f32_wgpu(&self.host, &other.host, &mut out).is_err()
+                {
+                    // Fallback to CPU on failure
+                    return self.add(other);
+                }
+                Ok(DeviceArray {
+                    shape: self.shape.clone(),
+                    dtype: self.dtype,
+                    device: self.device,
+                    host: out,
+                })
+            }
+            // Mixed-device pairs (including when only one of cuda/wgpu is
+            // enabled) fall back to CPU. Gated so it's only reachable (and
+            // only needed for exhaustiveness) when a second Device variant exists.
+            #[cfg(any(feature = "cuda", feature = "wgpu"))]
+            _ => self.add(other),
         }
     }
 
@@ -312,27 +353,145 @@ impl DeviceArray<f32> {
     /// assert_eq!(out.to_cpu_vec(), vec![2.0f32, 4.0, 6.0]);
     /// ```
     pub fn mul_scalar_auto(&self, alpha: f32) -> Self {
-        #[cfg(feature = "cuda")]
-        {
-            match self.device {
-                Device::Cpu => self.mul_scalar(alpha),
-                Device::Cuda => {
-                    let mut out = vec![0.0f32; self.host.len()];
-                    if crate::mul_scalar_f32_cuda(&self.host, alpha, &mut out).is_err() {
-                        return self.mul_scalar(alpha);
-                    }
-                    DeviceArray {
-                        shape: self.shape.clone(),
-                        dtype: self.dtype,
-                        device: self.device,
-                        host: out,
-                    }
+        match self.device {
+            Device::Cpu => self.mul_scalar(alpha),
+            #[cfg(feature = "cuda")]
+            Device::Cuda => {
+                let mut out = vec![0.0f32; self.host.len()];
+                if crate::mul_scalar_f32_cuda(&self.host, alpha, &mut out).is_err() {
+                    return self.mul_scalar(alpha);
+                }
+                DeviceArray {
+                    shape: self.shape.clone(),
+                    dtype: self.dtype,
+                    device: self.device,
+                    host: out,
                 }
             }
+            #[cfg(feature = "wgpu")]
+            Device::Wgpu => {
+                // No wgpu kernel for scalar-mul this milestone; CPU fallback.
+                self.mul_scalar(alpha)
+            }
         }
-        #[cfg(not(feature = "cuda"))]
-        {
-            self.mul_scalar(alpha)
+    }
+
+    /// 2D image resize (single-channel), CPU baseline. `self.shape` must be
+    /// `[height, width]`. Uses half-pixel-center source-coordinate mapping
+    /// (align_corners = false) — the wgpu kernel (`resize2d.wgsl`) uses the
+    /// identical formula so GPU/CPU parity holds a tight tolerance.
+    ///
+    /// # Panics
+    /// Panics if `self.shape` is not 2-dimensional.
+    ///
+    /// # Examples
+    /// ```
+    /// let data: Vec<f32> = (0..16).map(|v| v as f32).collect();
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[4, 4], scir_gpu::DType::F32, &data);
+    /// let out = arr.resize2d_f32(2, 2, scir_gpu::ResizeMode::Nearest);
+    /// assert_eq!(out.shape(), &[2, 2]);
+    /// ```
+    pub fn resize2d_f32(&self, out_h: usize, out_w: usize, mode: ResizeMode) -> Self {
+        assert_eq!(
+            self.shape.len(),
+            2,
+            "resize2d_f32 requires a 2D [height, width] array"
+        );
+        let (src_h, src_w) = (self.shape[0], self.shape[1]);
+        let mut out = vec![0.0f32; out_h * out_w];
+        let scale_x = src_w as f32 / out_w as f32;
+        let scale_y = src_h as f32 / out_h as f32;
+        for dy in 0..out_h {
+            for dx in 0..out_w {
+                let sx = ((dx as f32 + 0.5) * scale_x - 0.5).max(0.0);
+                let sy = ((dy as f32 + 0.5) * scale_y - 0.5).max(0.0);
+                let v = match mode {
+                    ResizeMode::Nearest => {
+                        let ix = sx.round().clamp(0.0, src_w as f32 - 1.0) as usize;
+                        let iy = sy.round().clamp(0.0, src_h as f32 - 1.0) as usize;
+                        self.host[iy * src_w + ix]
+                    }
+                    ResizeMode::Bilinear => {
+                        let x0 = sx.floor().clamp(0.0, src_w as f32 - 1.0);
+                        let y0 = sy.floor().clamp(0.0, src_h as f32 - 1.0);
+                        let x1 = (x0 + 1.0).min(src_w as f32 - 1.0);
+                        let y1 = (y0 + 1.0).min(src_h as f32 - 1.0);
+                        let fx = (sx - x0).clamp(0.0, 1.0);
+                        let fy = (sy - y0).clamp(0.0, 1.0);
+                        let (ix0, iy0, ix1, iy1) =
+                            (x0 as usize, y0 as usize, x1 as usize, y1 as usize);
+                        let v00 = self.host[iy0 * src_w + ix0];
+                        let v10 = self.host[iy0 * src_w + ix1];
+                        let v01 = self.host[iy1 * src_w + ix0];
+                        let v11 = self.host[iy1 * src_w + ix1];
+                        let top = v00 + (v10 - v00) * fx;
+                        let bot = v01 + (v11 - v01) * fx;
+                        top + (bot - top) * fy
+                    }
+                };
+                out[dy * out_w + dx] = v;
+            }
+        }
+        DeviceArray {
+            shape: vec![out_h, out_w],
+            dtype: self.dtype,
+            device: self.device,
+            host: out,
+        }
+    }
+
+    /// 2D image resize with device dispatch (wgpu when available and
+    /// requested, else CPU baseline). Falls back to the CPU baseline
+    /// silently if the wgpu dispatch fails, matching this crate's other
+    /// `*_auto` methods.
+    ///
+    /// # Examples
+    /// ```
+    /// let data: Vec<f32> = (0..16).map(|v| v as f32).collect();
+    /// let arr = scir_gpu::DeviceArray::from_cpu_slice(&[4, 4], scir_gpu::DType::F32, &data);
+    /// let out = arr.resize2d_auto(2, 2, scir_gpu::ResizeMode::Bilinear, scir_gpu::Device::Cpu);
+    /// assert_eq!(out.shape(), &[2, 2]);
+    /// ```
+    pub fn resize2d_auto(
+        &self,
+        out_h: usize,
+        out_w: usize,
+        mode: ResizeMode,
+        device: Device,
+    ) -> Self {
+        match device {
+            Device::Cpu => self.resize2d_f32(out_h, out_w, mode),
+            #[cfg(feature = "cuda")]
+            Device::Cuda => {
+                // No CUDA resize2d kernel this milestone (tracked non-goal;
+                // see docs/todo/streamz/video-gpu/TODO-VG-00-CONCEPTS.md §11).
+                self.resize2d_f32(out_h, out_w, mode)
+            }
+            #[cfg(feature = "wgpu")]
+            Device::Wgpu => {
+                assert_eq!(
+                    self.shape.len(),
+                    2,
+                    "resize2d_auto requires a 2D [height, width] array"
+                );
+                let (src_h, src_w) = (self.shape[0] as u32, self.shape[1] as u32);
+                match crate::wgpu_backend::resize2d_f32_wgpu(
+                    &self.host,
+                    src_w,
+                    src_h,
+                    out_w as u32,
+                    out_h as u32,
+                    mode.as_wgsl_mode(),
+                ) {
+                    Ok(host) => DeviceArray {
+                        shape: vec![out_h, out_w],
+                        dtype: self.dtype,
+                        device: self.device,
+                        host,
+                    },
+                    Err(_) => self.resize2d_f32(out_h, out_w, mode),
+                }
+            }
         }
     }
 }
@@ -1159,6 +1318,104 @@ mod tests {
             }
             Err(_) => {
                 eprintln!("CUDA not available; skipping CUDA FIR test");
+            }
+        }
+    }
+
+    #[test]
+    fn resize2d_cpu_nearest_identity_shape() {
+        let data: Vec<f32> = (0..16).map(|v| v as f32).collect();
+        let arr = DeviceArray::from_cpu_slice(&[4, 4], DType::F32, &data);
+        let out = arr.resize2d_f32(4, 4, ResizeMode::Nearest);
+        assert_eq!(out.shape(), &[4, 4]);
+        // Same-size nearest resize is a no-op under half-pixel-center mapping.
+        let out_f64: Vec<f64> = out.to_cpu_vec().iter().map(|v| *v as f64).collect();
+        let data_f64: Vec<f64> = data.iter().map(|v| *v as f64).collect();
+        assert_close!(&out_f64, &data_f64, slice, tol = 0.0);
+    }
+
+    #[test]
+    fn resize2d_cpu_bilinear_shrink() {
+        // 4x4 ramp (row-major, value == column index repeated per row) shrunk to 2x2.
+        let data: Vec<f32> = vec![
+            0.0, 1.0, 2.0, 3.0, 0.0, 1.0, 2.0, 3.0, 0.0, 1.0, 2.0, 3.0, 0.0, 1.0, 2.0, 3.0,
+        ];
+        let arr = DeviceArray::from_cpu_slice(&[4, 4], DType::F32, &data);
+        let out = arr.resize2d_f32(2, 2, ResizeMode::Bilinear);
+        assert_eq!(out.shape(), &[2, 2]);
+        let out_data = out.to_cpu_vec();
+        // Every row is identical; each output pixel should sit between the
+        // ramp's neighboring source columns rather than exactly on a sample.
+        for &v in &out_data {
+            assert!(
+                (0.0..=3.0).contains(&v),
+                "resized value {v} out of source range"
+            );
+        }
+    }
+
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn wgpu_add_vec_f32_parity() {
+        let a = vec![1.0f32, 2.0, 3.0, 4.0, 5.0];
+        let b = vec![0.5f32, 1.5, 2.5, 3.5, 4.5];
+        let mut out = vec![0.0f32; 5];
+        match crate::wgpu_backend::add_vec_f32_wgpu(&a, &b, &mut out) {
+            Ok(()) => {
+                let expected: Vec<f32> = a.iter().zip(&b).map(|(x, y)| x + y).collect();
+                let out_f64: Vec<f64> = out.iter().map(|v| *v as f64).collect();
+                let expected_f64: Vec<f64> = expected.iter().map(|v| *v as f64).collect();
+                assert_close!(&out_f64, &expected_f64, slice, tol = 1e-5);
+            }
+            Err(e) => {
+                eprintln!("wgpu not available; skipping wgpu add test: {e}");
+            }
+        }
+    }
+
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn wgpu_resize2d_parity_vs_cpu() {
+        let mut rng = rand::thread_rng();
+        let (src_h, src_w) = (17usize, 23usize);
+        let data: Vec<f32> = (0..src_h * src_w)
+            .map(|_| rng.gen::<f32>() * 10.0)
+            .collect();
+        let arr = DeviceArray::from_cpu_slice(&[src_h, src_w], DType::F32, &data);
+
+        for mode in [ResizeMode::Nearest, ResizeMode::Bilinear] {
+            let cpu_out = arr.resize2d_f32(9, 11, mode);
+            match crate::wgpu_backend::resize2d_f32_wgpu(
+                &data,
+                src_w as u32,
+                src_h as u32,
+                11,
+                9,
+                mode.as_wgsl_mode(),
+            ) {
+                Ok(gpu_out) => {
+                    let cpu_f64: Vec<f64> =
+                        cpu_out.to_cpu_vec().iter().map(|v| *v as f64).collect();
+                    let gpu_f64: Vec<f64> = gpu_out.iter().map(|v| *v as f64).collect();
+                    assert_close!(&gpu_f64, &cpu_f64, slice, atol = 1e-4, rtol = 1e-4);
+                }
+                Err(e) => {
+                    eprintln!("wgpu not available; skipping wgpu resize2d test ({mode:?}): {e}");
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn wgpu_adapter_name_reports_something() {
+        match crate::wgpu_adapter_name() {
+            Ok(name) => {
+                assert!(!name.is_empty());
+                eprintln!("wgpu adapter: {name}");
+            }
+            Err(e) => {
+                eprintln!("wgpu not available; skipping adapter-name test: {e}");
             }
         }
     }

@@ -12,13 +12,18 @@ keywords = ["scir","scipy","cuda","gpu","wgpu"]
 categories = ["science","mathematics"]
 
 [features]
-# Placeholder feature flags for future backends. No deps added yet to avoid network fetches.
 cuda = []
-wgpu = []
+# Portable-compute backend (Vulkan/Metal/DX12) per PLAN.md §6.1. `pollster` blocks
+# on wgpu's async adapter/device requests to match this crate's synchronous dispatch
+# style (see `add_vec_f32_cuda` et al.); `bytemuck` casts f32 slices to bind-group bytes.
+wgpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 
 [dependencies]
+bytemuck = { version = "1.25.1", features = ["derive"], optional = true }
 ndarray = { version = "0.15", default-features = false }
 num-traits = "0.2"
+pollster = { version = "1.0.1", optional = true }
+wgpu = { version = "30.0.0", optional = true }
 
 [dev-dependencies]
 scir-core = { version = "0.3.2", path = "../scir-core" }
